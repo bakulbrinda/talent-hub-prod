@@ -1,0 +1,533 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Auth ─────────────────────────────────────────────────────
+
+model User {
+  id            String         @id @default(uuid())
+  email         String         @unique
+  password      String
+  name          String
+  role          UserRole       @default(ADMIN)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  refreshTokens RefreshToken[]
+  scenarios     Scenario[]
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@map("refresh_tokens")
+}
+
+enum UserRole {
+  ADMIN
+  VIEWER
+}
+
+// ─── Job Architecture ──────────────────────────────────────────
+
+model JobArea {
+  id               String            @id @default(uuid())
+  name             String            @unique
+  description      String?
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  jobFamilies      JobFamily[]
+  salaryBands      SalaryBand[]
+  marketBenchmarks MarketBenchmark[]
+
+  @@map("job_areas")
+}
+
+model JobFamily {
+  id        String    @id @default(uuid())
+  name      String
+  jobAreaId String
+  jobArea   JobArea   @relation(fields: [jobAreaId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  jobCodes  JobCode[]
+
+  @@unique([name, jobAreaId])
+  @@map("job_families")
+}
+
+model Band {
+  id               String            @id @default(uuid())
+  code             String            @unique
+  label            String
+  level            Int               @unique
+  isEligibleForRSU Boolean           @default(false)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  grades           Grade[]
+  jobCodes         JobCode[]
+  salaryBands      SalaryBand[]
+  marketBenchmarks MarketBenchmark[]
+
+  @@map("bands")
+}
+
+model Grade {
+  id          String    @id @default(uuid())
+  bandId      String
+  band        Band      @relation(fields: [bandId], references: [id], onDelete: Cascade)
+  gradeCode   String
+  description String?
+  jobCodes    JobCode[]
+
+  @@unique([bandId, gradeCode])
+  @@map("grades")
+}
+
+model JobCode {
+  id               String            @id @default(uuid())
+  code             String            @unique
+  title            String
+  jobFamilyId      String
+  jobFamily        JobFamily         @relation(fields: [jobFamilyId], references: [id], onDelete: Cascade)
+  bandId           String
+  band             Band              @relation(fields: [bandId], references: [id])
+  gradeId          String?
+  grade            Grade?            @relation(fields: [gradeId], references: [id])
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  employees        Employee[]
+  marketBenchmarks MarketBenchmark[]
+
+  @@map("job_codes")
+}
+
+// ─── Skills ────────────────────────────────────────────────────
+
+model Skill {
+  id                String          @id @default(uuid())
+  name              String          @unique
+  category          String?
+  premiumMultiplier Decimal?        @db.Decimal(5, 2)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+  employeeSkills    EmployeeSkill[]
+
+  @@map("skills")
+}
+
+model EmployeeSkill {
+  employeeId        String
+  employee          Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  skillId           String
+  skill             Skill            @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  proficiencyLevel  ProficiencyLevel @default(INTERMEDIATE)
+  certificationName String?
+  certifiedAt       DateTime?
+
+  @@id([employeeId, skillId])
+  @@map("employee_skills")
+}
+
+enum ProficiencyLevel {
+  BEGINNER
+  INTERMEDIATE
+  ADVANCED
+  EXPERT
+}
+
+// ─── Employees ─────────────────────────────────────────────────
+
+model Employee {
+  id                 String         @id @default(uuid())
+  employeeId         String         @unique
+  firstName          String
+  lastName           String
+  nickName           String?
+  email              String         @unique
+  department         String
+  designation        String
+  reportingManagerId String?
+  reportingManager   Employee?      @relation("ReportsTo", fields: [reportingManagerId], references: [id])
+  directReports      Employee[]     @relation("ReportsTo")
+  dateOfJoining      DateTime
+  dateOfExit         DateTime?
+  grade              String
+  band               String
+  jobCodeId          String?
+  jobCode            JobCode?       @relation(fields: [jobCodeId], references: [id])
+  employmentType     EmploymentType @default(FULL_TIME)
+  employmentStatus   EmploymentStatus @default(ACTIVE)
+  gender             Gender
+  workLocation       String?
+  workMode           WorkMode       @default(HYBRID)
+  costCenter         String?
+
+  // Annual Compensation
+  annualFixed             Decimal @db.Decimal(15, 2) @default(0)
+  variablePay             Decimal @db.Decimal(15, 2) @default(0)
+  specialAllowance        Decimal @db.Decimal(15, 2) @default(0)
+  hra                     Decimal @db.Decimal(15, 2) @default(0)
+  pfYearly                Decimal @db.Decimal(15, 2) @default(0)
+  basicAnnual             Decimal @db.Decimal(15, 2) @default(0)
+  retentionBonus          Decimal @db.Decimal(15, 2) @default(0)
+  annualCtc               Decimal @db.Decimal(15, 2) @default(0)
+  joiningBonus            Decimal @db.Decimal(15, 2) @default(0)
+  lta                     Decimal @db.Decimal(15, 2) @default(0)
+  flexiTotalYearly        Decimal @db.Decimal(15, 2) @default(0)
+  subTotalA               Decimal @db.Decimal(15, 2) @default(0)
+  incentives              Decimal @db.Decimal(15, 2) @default(0)
+
+  // Monthly Compensation
+  hraMonthly              Decimal @db.Decimal(15, 2) @default(0)
+  pfMonthly               Decimal @db.Decimal(15, 2) @default(0)
+  basicMonthly            Decimal @db.Decimal(15, 2) @default(0)
+  ltaMonthly              Decimal @db.Decimal(15, 2) @default(0)
+  monthlyGrossSalary      Decimal @db.Decimal(15, 2) @default(0)
+  flexiTotalMonthly       Decimal @db.Decimal(15, 2) @default(0)
+  subTotalAMonthly        Decimal @db.Decimal(15, 2) @default(0)
+  monthlySpecialAllowance Decimal @db.Decimal(15, 2) @default(0)
+
+  // Revision History
+  april2023            Decimal?  @db.Decimal(15, 2)
+  july2023             Decimal?  @db.Decimal(15, 2)
+  april2024            Decimal?  @db.Decimal(15, 2)
+  july2024             Decimal?  @db.Decimal(15, 2)
+  lastIncrementDate    DateTime?
+  lastIncrementPercent Decimal?  @db.Decimal(5, 2)
+
+  // Computed Fields (updated by background jobs)
+  compaRatio          Decimal? @db.Decimal(8, 2)
+  payRangePenetration Decimal? @db.Decimal(8, 2)
+  attritionRiskScore  Decimal? @db.Decimal(5, 2)
+  timeInCurrentGrade  Int?
+
+  // Meta
+  refNo                String?
+  remarks              String?
+  addedBy              String?
+  compensationDocument String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  skills                 EmployeeSkill[]
+  performanceRatings     PerformanceRating[]
+  benefits               EmployeeBenefit[]
+  rsuGrants              RsuGrant[]
+  commissionAchievements CommissionAchievement[]
+
+  @@index([band])
+  @@index([department])
+  @@index([employmentStatus])
+  @@index([gender])
+  @@index([band, department])
+  @@map("employees")
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERN
+}
+
+enum EmploymentStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+}
+
+enum Gender {
+  MALE
+  FEMALE
+  NON_BINARY
+  PREFER_NOT_TO_SAY
+}
+
+enum WorkMode {
+  REMOTE
+  HYBRID
+  ONSITE
+}
+
+// ─── Salary Bands & Benchmarks ─────────────────────────────────
+
+model SalaryBand {
+  id            String    @id @default(uuid())
+  bandId        String
+  band          Band      @relation(fields: [bandId], references: [id])
+  jobAreaId     String?
+  jobArea       JobArea?  @relation(fields: [jobAreaId], references: [id])
+  effectiveDate DateTime
+  minSalary     Decimal   @db.Decimal(15, 2)
+  midSalary     Decimal   @db.Decimal(15, 2)
+  maxSalary     Decimal   @db.Decimal(15, 2)
+  currency      String    @default("INR")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@map("salary_bands")
+}
+
+model MarketBenchmark {
+  id        String    @id @default(uuid())
+  bandId    String?
+  band      Band?     @relation(fields: [bandId], references: [id])
+  jobCodeId String?
+  jobCode   JobCode?  @relation(fields: [jobCodeId], references: [id])
+  jobAreaId String?
+  jobArea   JobArea?  @relation(fields: [jobAreaId], references: [id])
+  location  String?
+  p25       Decimal   @db.Decimal(15, 2)
+  p50       Decimal   @db.Decimal(15, 2)
+  p75       Decimal   @db.Decimal(15, 2)
+  p90       Decimal   @db.Decimal(15, 2)
+  source    String?
+  asOfDate  DateTime
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("market_benchmarks")
+}
+
+// ─── Performance ───────────────────────────────────────────────
+
+model PerformanceRating {
+  id          String   @id @default(uuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  cycle       String
+  rating      Decimal  @db.Decimal(4, 2)
+  ratingLabel String?
+  comments    String?
+  reviewedBy  String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([employeeId, cycle])
+  @@map("performance_ratings")
+}
+
+// ─── Benefits ──────────────────────────────────────────────────
+
+model BenefitsCatalog {
+  id                  String          @id @default(uuid())
+  name                String          @unique
+  category            BenefitCategory
+  description         String?
+  annualValue         Decimal?        @db.Decimal(15, 2)
+  eligibilityCriteria Json?
+  isActive            Boolean         @default(true)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+  employeeBenefits    EmployeeBenefit[]
+
+  @@map("benefits_catalog")
+}
+
+model EmployeeBenefit {
+  id                 String          @id @default(uuid())
+  employeeId         String
+  employee           Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  benefitId          String
+  benefit            BenefitsCatalog @relation(fields: [benefitId], references: [id])
+  enrolledAt         DateTime        @default(now())
+  expiresAt          DateTime?
+  utilizationPercent Decimal?        @db.Decimal(5, 2)
+  utilizedValue      Decimal?        @db.Decimal(15, 2)
+  status             BenefitStatus   @default(ACTIVE)
+  createdAt          DateTime        @default(now())
+  updatedAt          DateTime        @updatedAt
+
+  @@unique([employeeId, benefitId])
+  @@map("employee_benefits")
+}
+
+enum BenefitCategory {
+  INSURANCE
+  EQUITY
+  LEARNING
+  LEAVE
+  RECOGNITION
+  WELLNESS
+}
+
+enum BenefitStatus {
+  ACTIVE
+  EXPIRED
+  CLAIMED
+}
+
+// ─── RSU ───────────────────────────────────────────────────────
+
+model RsuGrant {
+  id                    String          @id @default(uuid())
+  employeeId            String
+  employee              Employee        @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  grantDate             DateTime
+  totalUnits            Int
+  vestedUnits           Int             @default(0)
+  vestingScheduleMonths Int             @default(48)
+  cliffMonths           Int             @default(12)
+  vestingPercent        Decimal         @db.Decimal(5, 2) @default(25)
+  priceAtGrant          Decimal?        @db.Decimal(10, 2)
+  currentPrice          Decimal?        @db.Decimal(10, 2)
+  status                RsuStatus       @default(ACTIVE)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  vestingEvents         RsuVestingEvent[]
+
+  @@map("rsu_grants")
+}
+
+model RsuVestingEvent {
+  id           String    @id @default(uuid())
+  rsuGrantId   String
+  rsuGrant     RsuGrant  @relation(fields: [rsuGrantId], references: [id], onDelete: Cascade)
+  vestingDate  DateTime
+  unitsVesting Int
+  isVested     Boolean   @default(false)
+  vestedAt     DateTime?
+  createdAt    DateTime  @default(now())
+
+  @@map("rsu_vesting_events")
+}
+
+enum RsuStatus {
+  ACTIVE
+  FULLY_VESTED
+  FORFEITED
+}
+
+// ─── Variable Pay ──────────────────────────────────────────────
+
+model CommissionPlan {
+  id                    String                  @id @default(uuid())
+  name                  String
+  targetVariablePercent Decimal                 @db.Decimal(5, 2)
+  acceleratorTiers      Json
+  planType              CommissionPlanType
+  effectiveFrom         DateTime
+  effectiveTo           DateTime?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  achievements          CommissionAchievement[]
+
+  @@map("commission_plans")
+}
+
+model CommissionAchievement {
+  id                 String         @id @default(uuid())
+  employeeId         String
+  employee           Employee       @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  planId             String
+  plan               CommissionPlan @relation(fields: [planId], references: [id])
+  period             String
+  targetAmount       Decimal        @db.Decimal(15, 2)
+  achievedAmount     Decimal        @db.Decimal(15, 2)
+  achievementPercent Decimal        @db.Decimal(8, 2)
+  payoutAmount       Decimal        @db.Decimal(15, 2)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  @@map("commission_achievements")
+}
+
+enum CommissionPlanType {
+  SALES
+  PERFORMANCE
+  HYBRID
+}
+
+// ─── Scenarios ─────────────────────────────────────────────────
+
+model Scenario {
+  id                    String         @id @default(uuid())
+  name                  String
+  description           String?
+  createdById           String
+  createdBy             User           @relation(fields: [createdById], references: [id])
+  rules                 Json
+  status                ScenarioStatus @default(DRAFT)
+  totalCostImpact       Decimal?       @db.Decimal(15, 2)
+  affectedEmployeeCount Int?
+  snapshotData          Json?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@map("scenarios")
+}
+
+enum ScenarioStatus {
+  DRAFT
+  APPLIED
+  ARCHIVED
+}
+
+// ─── Notifications ─────────────────────────────────────────────
+
+model Notification {
+  id                String               @id @default(uuid())
+  type              NotificationType
+  title             String
+  message           String
+  severity          NotificationSeverity @default(INFO)
+  isRead            Boolean              @default(false)
+  relatedEntityType String?
+  relatedEntityId   String?
+  metadata          Json?
+  createdAt         DateTime             @default(now())
+
+  @@index([isRead])
+  @@index([severity])
+  @@index([type])
+  @@map("notifications")
+}
+
+enum NotificationType {
+  PAY_ANOMALY
+  BUDGET_ALERT
+  NEW_HIRE_PARITY
+  RSU_VESTING
+  GENERAL
+}
+
+enum NotificationSeverity {
+  INFO
+  WARNING
+  CRITICAL
+}
+
+// ─── AI Insights ───────────────────────────────────────────────
+
+model AiInsight {
+  id               String    @id @default(uuid())
+  insightType      String
+  title            String
+  narrative        String    @db.Text
+  data             Json
+  filters          Json?
+  generatedAt      DateTime  @default(now())
+  expiresAt        DateTime?
+  model            String    @default("claude-sonnet-4-6")
+  promptTokens     Int?
+  completionTokens Int?
+  createdAt        DateTime  @default(now())
+
+  @@index([insightType])
+  @@index([expiresAt])
+  @@map("ai_insights")
+}
