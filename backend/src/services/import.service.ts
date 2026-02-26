@@ -468,12 +468,20 @@ export const importService = {
 
   invalidateAllCaches: async () => {
     try {
-      await cacheDelPattern('dashboard:*');
-      await cacheDel('ai:dashboard-summary');
-      await cacheDel('benefits:catalog');
-      await cacheDel('benefits:utilization');
+      // Wipe every module cache that derives its data from the employee table.
+      // Promise.allSettled ensures one failing Redis key never blocks the rest.
+      await Promise.allSettled([
+        cacheDelPattern('dashboard:*'),
+        cacheDelPattern('pay-equity:*'),
+        cacheDelPattern('salary-bands:*'),
+        cacheDelPattern('performance:*'),
+        cacheDel('ai:dashboard-summary'),
+        cacheDel('benefits:catalog'),
+        cacheDel('benefits:utilization'),
+      ]);
+      // Expire all cached AI insights so they regenerate with fresh employee data.
       await prisma.aiInsight.updateMany({ data: { expiresAt: new Date() } });
-      logger.info('All caches invalidated after employee import');
+      logger.info('All module caches invalidated after employee import');
     } catch (err) {
       logger.warn('Cache invalidation error (non-fatal):', err);
     }

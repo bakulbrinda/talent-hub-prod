@@ -68,6 +68,10 @@ export const SOCKET_EVENTS = {
   BUDGET_THRESHOLD: 'budget:threshold',
   RSU_VESTING: 'rsu:vesting',
   DASHBOARD_REFRESH: 'dashboard:refresh',
+  // Cross-module data change events — emitted after any employee or band write
+  EMPLOYEE_DATA_CHANGED: 'employee:data:changed',
+  SALARY_BAND_UPDATED: 'salary:band:updated',
+  DATA_REFRESH_MODULES: 'data:refresh:modules',
 } as const;
 
 // ─── AI Insight Configuration ─────────────────────────────────

@@ -1,5 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
+import { cacheDelPattern } from '../lib/redis';
+import { emitDashboardRefresh, emitEmployeeCreated, emitEmployeeUpdated } from '../lib/socket';
 
 export interface EmployeeFilters {
   page?: number;
@@ -10,6 +12,18 @@ export interface EmployeeFilters {
   gender?: string;
   workMode?: string;
 }
+
+// Clears every Redis cache that is derived from employee data.
+// Called after any write (create / update / import) so all modules
+// serve fresh data on the next request instead of a stale cache hit.
+const invalidateEmployeeDerivedCaches = async (): Promise<void> => {
+  await Promise.allSettled([
+    cacheDelPattern('dashboard:*'),
+    cacheDelPattern('pay-equity:*'),
+    cacheDelPattern('salary-bands:*'),
+    cacheDelPattern('performance:*'),
+  ]);
+};
 
 export const employeeService = {
   getAll: async (filters: EmployeeFilters = {}) => {
@@ -75,13 +89,23 @@ export const employeeService = {
   create: async (data: any) => {
     const employee = await prisma.employee.create({ data });
     await employeeService.computeAndUpdateDerivedFields(employee.id);
-    return prisma.employee.findUniqueOrThrow({ where: { id: employee.id } });
+    const updated = await prisma.employee.findUniqueOrThrow({ where: { id: employee.id } });
+    // Invalidate all Redis caches derived from employee data, then notify
+    // every connected client so their React Query caches refetch immediately.
+    await invalidateEmployeeDerivedCaches();
+    emitEmployeeCreated(updated as Record<string, unknown>);
+    emitDashboardRefresh();
+    return updated;
   },
 
   update: async (id: string, data: any) => {
-    const employee = await prisma.employee.update({ where: { id }, data });
+    await prisma.employee.update({ where: { id }, data });
     await employeeService.computeAndUpdateDerivedFields(id);
-    return prisma.employee.findUniqueOrThrow({ where: { id } });
+    const updated = await prisma.employee.findUniqueOrThrow({ where: { id } });
+    await invalidateEmployeeDerivedCaches();
+    emitEmployeeUpdated(updated as Record<string, unknown>);
+    emitDashboardRefresh();
+    return updated;
   },
 
   getAnalytics: async () => {

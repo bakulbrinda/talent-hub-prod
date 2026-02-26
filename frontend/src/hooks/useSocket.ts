@@ -64,27 +64,61 @@ export function useSocket() {
       });
     });
 
+    // Invalidate every dashboard query key, not just kpis + bandDistribution.
     socket.on('dashboard:refresh', () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.kpis });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.bandDistribution });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     });
 
+    // New employee created — refresh employees list plus every module whose
+    // aggregates (compa-ratio bands, pay gaps, salary outliers) just changed.
     socket.on('employee:created', (payload: { employee: { firstName: string; lastName: string } }) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.employees.all() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.kpis });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['pay-equity'] });
+      queryClient.invalidateQueries({ queryKey: ['salary-bands'] });
       toast.success(`New employee added: ${payload.employee.firstName} ${payload.employee.lastName}`, { duration: 4000 });
     });
 
+    // Employee record edited — compa-ratio, pay gap, band outliers may all shift.
     socket.on('employee:updated', () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.employees.all() });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['pay-equity'] });
+      queryClient.invalidateQueries({ queryKey: ['salary-bands'] });
+      queryClient.invalidateQueries({ queryKey: ['performance'] });
     });
 
+    // Bulk import complete — full refresh of every data-dependent module.
     socket.on('import:complete', (payload: { imported: number; failed: number }) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.employees.all() });
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.kpis });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['pay-equity'] });
+      queryClient.invalidateQueries({ queryKey: ['salary-bands'] });
+      queryClient.invalidateQueries({ queryKey: ['performance'] });
+      queryClient.invalidateQueries({ queryKey: ['scenarios'] });
+      queryClient.invalidateQueries({ queryKey: ['ai-insights'] });
       if (payload.imported > 0) {
         toast.success(`Bulk import finished: ${payload.imported} employees added`, { duration: 5000 });
       }
+    });
+
+    // Emitted by employee.service after any create/update — catches cases where
+    // the specific 'employee:created' / 'employee:updated' events aren't enough.
+    socket.on('employee:data:changed', () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['pay-equity'] });
+      queryClient.invalidateQueries({ queryKey: ['salary-bands'] });
+      queryClient.invalidateQueries({ queryKey: ['performance'] });
+    });
+
+    // Emitted when a SalaryBand record is updated (feat-008).
+    // Compa-ratios for every employee in that band become stale.
+    socket.on('salary:band:updated', () => {
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['pay-equity'] });
+      queryClient.invalidateQueries({ queryKey: ['salary-bands'] });
     });
 
     return () => {
@@ -97,6 +131,8 @@ export function useSocket() {
       socket.off('employee:created');
       socket.off('employee:updated');
       socket.off('import:complete');
+      socket.off('employee:data:changed');
+      socket.off('salary:band:updated');
     };
   }, [isAuthenticated, accessToken]);
 
