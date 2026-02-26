@@ -116,7 +116,7 @@
       "id": "feat-007",
       "title": "Real-Time Data Only — Purge All Placeholders and Mock Values",
       "description": "Full audit of every service file and frontend page for hardcoded values, placeholder text, fallback mock arrays, or static demo returns. All data must flow from live Prisma queries. AI insight prompts must aggregate real employee data before calling Claude — no static summaries. Ensure seed data is varied and realistic enough to produce meaningful analytics (not all employees in same band, realistic gender distribution, varied performance ratings). Remove any 'TODO: replace with real data' patterns.",
-      "status": "pending",
+      "status": "done",
       "assigned_to": "bakul",
       "files_affected": [
         "backend/src/services/aiInsights.service.ts",
