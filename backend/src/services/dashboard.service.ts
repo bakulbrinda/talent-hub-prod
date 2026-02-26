@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { cacheGet, cacheSet } from '../lib/redis';
+import { BAND_ORDER } from '../types/index';
 
 const CACHE_TTL = 30; // seconds
 
@@ -47,9 +48,8 @@ export const dashboardService = {
       where: { employmentStatus: 'ACTIVE' },
       _count: true,
     });
-    const bandOrder = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
     return result
-      .sort((a, b) => bandOrder.indexOf(a.band) - bandOrder.indexOf(b.band))
+      .sort((a, b) => BAND_ORDER.indexOf(a.band as typeof BAND_ORDER[number]) - BAND_ORDER.indexOf(b.band as typeof BAND_ORDER[number]))
       .map(r => ({ band: r.band, count: r._count }));
   }),
 

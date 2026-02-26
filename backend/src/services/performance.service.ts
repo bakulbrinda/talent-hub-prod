@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { callClaude } from '../lib/claudeClient';
 import { cacheGet, cacheSet } from '../lib/redis';
+import { BAND_ORDER } from '../types/index';
 
 export const performanceService = {
   getRatings: async (filters: Record<string, string> = {}) => {
@@ -63,13 +64,12 @@ export const performanceService = {
       },
       include: { performanceRatings: { orderBy: { cycle: 'desc' }, take: 1 } },
     });
-    const bandOrder = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
     return employees
-      .filter(e => bandOrder.indexOf(e.band) < bandOrder.length - 1)
+      .filter(e => BAND_ORDER.indexOf(e.band as typeof BAND_ORDER[number]) < BAND_ORDER.length - 1)
       .map(e => ({
         id: e.id,
         name: `${e.firstName} ${e.lastName}`,
-        band: e.band, nextBand: bandOrder[bandOrder.indexOf(e.band) + 1],
+        band: e.band, nextBand: BAND_ORDER[BAND_ORDER.indexOf(e.band as typeof BAND_ORDER[number]) + 1],
         department: e.department,
         rating: Number(e.performanceRatings[0]?.rating || 0),
         ratingLabel: e.performanceRatings[0]?.ratingLabel || '',

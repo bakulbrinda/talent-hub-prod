@@ -102,7 +102,7 @@ export const emitDashboardRefresh = (): void => {
 
 export const emitEmployeeCreated = (employee: Record<string, unknown>): void => {
   try {
-    getIO().emit('employee:created', { employee });
+    getIO().emit(SOCKET_EVENTS.EMPLOYEE_CREATED, { employee });
   } catch (err) {
     logger.error('Failed to emit employee:created:', err);
   }
@@ -110,15 +110,31 @@ export const emitEmployeeCreated = (employee: Record<string, unknown>): void => 
 
 export const emitEmployeeUpdated = (employee: Record<string, unknown>): void => {
   try {
-    getIO().emit('employee:updated', { employee });
+    getIO().emit(SOCKET_EVENTS.EMPLOYEE_UPDATED, { employee });
   } catch (err) {
     logger.error('Failed to emit employee:updated:', err);
   }
 };
 
+export const emitEmployeeDataChanged = (): void => {
+  try {
+    getIO().emit(SOCKET_EVENTS.EMPLOYEE_DATA_CHANGED, {});
+  } catch (err) {
+    logger.error('Failed to emit employee:data:changed:', err);
+  }
+};
+
+export const emitSalaryBandUpdated = (): void => {
+  try {
+    getIO().emit(SOCKET_EVENTS.SALARY_BAND_UPDATED, {});
+  } catch (err) {
+    logger.error('Failed to emit salary:band:updated:', err);
+  }
+};
+
 export const emitEmployeeImportProgress = (payload: { processed: number; total: number; errors: unknown[] }): void => {
   try {
-    getIO().emit('import:progress', payload);
+    getIO().emit(SOCKET_EVENTS.IMPORT_PROGRESS, payload);
   } catch (err) {
     logger.error('Failed to emit import:progress:', err);
   }
@@ -126,7 +142,7 @@ export const emitEmployeeImportProgress = (payload: { processed: number; total: 
 
 export const emitEmployeeImportComplete = (payload: { imported: number; failed: number; errors: unknown[] }): void => {
   try {
-    getIO().emit('import:complete', payload);
+    getIO().emit(SOCKET_EVENTS.IMPORT_COMPLETE, payload);
   } catch (err) {
     logger.error('Failed to emit import:complete:', err);
   }

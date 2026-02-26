@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { callClaude } from '../lib/claudeClient';
 import { cacheGet, cacheSet } from '../lib/redis';
+import { BAND_ORDER } from '../types/index';
 import crypto from 'crypto';
 
 const INSIGHT_TTL = 6 * 60 * 60; // 6 hours
@@ -217,12 +218,11 @@ async function buildInsightData(insightType: string): Promise<any> {
         include: { performanceRatings: { orderBy: { cycle: 'desc' }, take: 1 } },
         take: 20,
       });
-      const bandOrder = ['A1','A2','P1','P2','P3','M1','M2','D0','D1','D2'];
       return {
         totalReady: readyEmps.length,
         readyEmployees: readyEmps.map(e => ({
           name: `${e.firstName} ${e.lastName}`,
-          band: e.band, nextBand: bandOrder[bandOrder.indexOf(e.band) + 1] || 'D2+',
+          band: e.band, nextBand: BAND_ORDER[BAND_ORDER.indexOf(e.band as typeof BAND_ORDER[number]) + 1] || 'P4+',
           rating: Number(e.performanceRatings[0]?.rating || 0),
           compaRatio: Number(e.compaRatio || 0),
           tenureMonths: Math.floor((new Date().getTime() - new Date(e.dateOfJoining).getTime()) / (1000*60*60*24*30)),

@@ -64,6 +64,10 @@ export interface SocketRsuVestingPayload {
   estimatedValue?: number;
 }
 
+// ─── Band Order (single source of truth for backend) ─────────
+export const BAND_ORDER = ['A1', 'A2', 'P1', 'P2', 'P3', 'P4'] as const;
+export type BandCode = typeof BAND_ORDER[number];
+
 // ─── Socket Event Names ───────────────────────────────────────
 
 export const SOCKET_EVENTS = {
@@ -73,4 +77,11 @@ export const SOCKET_EVENTS = {
   BUDGET_THRESHOLD:      'budget:threshold',
   RSU_VESTING:           'rsu:vesting',
   DASHBOARD_REFRESH:     'dashboard:refresh',
+  EMPLOYEE_CREATED:      'employee:created',
+  EMPLOYEE_UPDATED:      'employee:updated',
+  EMPLOYEE_DATA_CHANGED: 'employee:data:changed',
+  SALARY_BAND_UPDATED:   'salary:band:updated',
+  IMPORT_PROGRESS:       'import:progress',
+  IMPORT_COMPLETE:       'import:complete',
+  DATA_REFRESH_MODULES:  'data:refresh:modules',
 } as const;
