@@ -21,7 +21,7 @@
       "id": "feat-002",
       "title": "Real-Time Data Flow Accuracy Across All Modules",
       "description": "Ensure employee data uploaded or modified in any module immediately propagates to salary bands, pay equity, dashboard KPIs, AI insights, and performance. Implement targeted Redis cache invalidation on employee create/update/import events (cacheDelPattern). Emit socket events after every write that affects multi-module data so all connected clients see live updates. Audit all services to remove stale cache returns after data mutations.",
-      "status": "pending",
+      "status": "done",
       "assigned_to": "bakul",
       "files_affected": [
         "backend/src/services/employee.service.ts",

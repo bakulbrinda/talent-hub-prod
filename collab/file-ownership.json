@@ -14,7 +14,7 @@
     "shared/types/index.ts":            { "owner": "aryan",      "feature": "feat-003", "locked": false,
                                           "_claimedBy": ["feat-003","feat-004","feat-006"],
                                           "_note": "Aryan adds dashboard types first. Bakul coordinates before adding email types (feat-004)." },
-    "shared/constants/index.ts":        { "owner": "bakul",      "feature": "feat-002", "locked": false,
+    "shared/constants/index.ts":        { "owner": "bakul",      "feature": "feat-007", "locked": false,
                                           "_claimedBy": ["feat-002","feat-007","feat-008"],
                                           "_note": "All Bakul features. Sequence: feat-002 → feat-007 → feat-008." },
 
