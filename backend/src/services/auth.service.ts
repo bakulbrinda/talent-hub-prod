@@ -2,7 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { unauthorized, badRequest } from '../middleware/errorHandler';
-import type { AuthUser } from '../../../shared/types/index';
+import type { AuthUser } from '../types/index';
 
 const ACCESS_SECRET = process.env.JWT_SECRET || 'compsense-access-secret-min-32-chars';
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'compsense-refresh-secret-min-32-chars';

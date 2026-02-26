@@ -8,8 +8,8 @@ import type {
   SocketPayAnomalyPayload,
   SocketBudgetThresholdPayload,
   SocketRsuVestingPayload,
-} from '../../../shared/types/index';
-import { SOCKET_EVENTS } from '../../../shared/constants/index';
+} from '../types/index';
+import { SOCKET_EVENTS } from '../types/index';
 
 let io: SocketServer;
 

@@ -1,17 +1,20 @@
 {
-  "name": "compsense-backend",
+  "name": "talent-hub-backend",
   "version": "1.0.0",
-  "description": "CompSense Backend API",
+  "description": "Talent Hub — AI-Driven Compensation & Benefits Intelligence Platform",
   "main": "dist/index.js",
   "scripts": {
     "dev": "ts-node-dev --respawn --transpile-only src/index.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
     "start": "node dist/index.js",
+    "postinstall": "prisma generate",
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
+    "db:migrate:deploy": "prisma migrate deploy",
     "db:seed": "ts-node prisma/seed.ts",
     "db:reset": "prisma migrate reset --force && ts-node prisma/seed.ts",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "create-admin": "ts-node -e \"require('./scripts/create-admin')\" 2>/dev/null || ts-node scripts/create-admin.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",
