@@ -135,10 +135,24 @@ export const employeeService = {
   },
 
   computeAndUpdateDerivedFields: async (employeeId: string) => {
-    const employee = await prisma.employee.findUnique({ where: { id: employeeId } });
+    // Load employee with jobCode chain so we can resolve the correct jobArea
+    const employee = await prisma.employee.findUnique({
+      where: { id: employeeId },
+      include: {
+        jobCode: { include: { jobFamily: { include: { jobArea: true } } } },
+      },
+    });
     if (!employee) return;
 
+    // Prefer the SalaryBand scoped to the employee's jobArea; fall back to
+    // any SalaryBand for this band code (handles employees without a jobCode).
+    const jobAreaId = employee.jobCode?.jobFamily?.jobArea?.id;
     const salaryBand = await prisma.salaryBand.findFirst({
+      where: {
+        band: { code: employee.band },
+        ...(jobAreaId ? { jobAreaId } : {}),
+      },
+    }) ?? await prisma.salaryBand.findFirst({
       where: { band: { code: employee.band } },
     });
 
