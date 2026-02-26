@@ -135,7 +135,7 @@
       "id": "feat-008",
       "title": "Real-Time Calculation Logic — DB-Driven Salary Band Compliance",
       "description": "Rewrite all compensation calculation logic to dynamically use SalaryBand records from the DB rather than hardcoded constants. Compa-ratio must reference actual SalaryBand.minSalary/midSalary/maxSalary for employee's band + jobArea combination. Pay equity outlier detection must use DB band ranges. Performance pay-alignment gap must use live band midpoints. computeAndUpdateDerivedFields() in employee.service must query SalaryBand table on every employee save. Trigger batch recalculation for ALL employees when a SalaryBand record is updated (socket broadcast + Redis invalidation).",
-      "status": "pending",
+      "status": "done",
       "assigned_to": "bakul",
       "files_affected": [
         "backend/src/services/employee.service.ts",
