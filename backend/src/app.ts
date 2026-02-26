@@ -2,6 +2,8 @@ import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
+import path from 'path';
+import fs from 'fs';
 import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
 import authRoutes from './routes/auth.routes';
@@ -22,7 +24,12 @@ import importRoutes from './routes/import.routes';
 
 const app = express();
 
+// Trust Cloudflare / reverse proxy (required for rate-limiter behind tunnels)
+app.set('trust proxy', 1);
+
 // ─── Security & Performance ───────────────────────────────────
+// When FRONTEND_URL is not set (tunnel / local dev), allow all origins.
+// In production with FRONTEND_URL set, restrict to that domain + localhost.
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:4173',
@@ -31,7 +38,8 @@ const allowedOrigins = [
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // mobile / curl / Postman
+    if (!origin) return callback(null, true); // curl / Postman / mobile
+    if (!process.env.FRONTEND_URL) return callback(null, true); // tunnel mode: allow all
     if (allowedOrigins.includes(origin)) return callback(null, true);
     callback(new Error(`CORS: origin ${origin} not allowed`));
   },
@@ -92,10 +100,21 @@ app.use('/api/scenarios', scenarioRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/import', importRoutes);
 
-// ─── 404 Fallback ─────────────────────────────────────────────
+// ─── 404 for unknown API routes ───────────────────────────────
 app.use('/api/*', (_req, res) => {
   res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Route not found' } });
 });
+
+// ─── Serve Frontend (Tunnel / Production mode) ────────────────
+// If frontend/dist exists, serve it from Express so a single port
+// covers both the API and the UI (perfect for Cloudflare Tunnel).
+const frontendDist = path.resolve(__dirname, '..', '..', 'frontend', 'dist');
+if (fs.existsSync(path.join(frontendDist, 'index.html'))) {
+  app.use(express.static(frontendDist));
+  app.get(/^(?!\/api).*/, (_req, res) => {
+    res.sendFile(path.join(frontendDist, 'index.html'));
+  });
+}
 
 // ─── Error Handler ────────────────────────────────────────────
 app.use(errorHandler);

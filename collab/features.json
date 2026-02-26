@@ -1,0 +1,155 @@
+{
+  "features": [
+    {
+      "id": "feat-001",
+      "title": "Platform Navigation Restructuring — 3-Module Hub",
+      "description": "Restructure the platform so Dashboard, Compensation & Pay, and Benefits are the 3 primary entry points. All sub-modules navigate FROM these hubs. Create CompensationHubPage (groups: salary bands, pay equity, variable pay, RSU, scenarios) and BenefitsHubPage (groups: benefits catalog, enrollments, utilization). Sidebar collapses to 3 primary sections. Quick-nav cards on Dashboard act as the launch pad.",
+      "status": "pending",
+      "assigned_to": "aryan",
+      "files_affected": [
+        "frontend/src/App.tsx",
+        "frontend/src/components/layout/Sidebar.tsx",
+        "frontend/src/pages/DashboardPage.tsx",
+        "frontend/src/pages/CompensationHubPage.tsx",
+        "frontend/src/pages/BenefitsHubPage.tsx"
+      ],
+      "risk_level": "high",
+      "clash_with": ["feat-003", "feat-005", "feat-006"],
+      "notes": "App.tsx and Sidebar.tsx are Tier-2 clash files. Aryan must complete and merge this BEFORE feat-003, feat-005, feat-006 begin touching those files. Sequence: feat-001 → feat-005 → feat-003 → feat-006."
+    },
+    {
+      "id": "feat-002",
+      "title": "Real-Time Data Flow Accuracy Across All Modules",
+      "description": "Ensure employee data uploaded or modified in any module immediately propagates to salary bands, pay equity, dashboard KPIs, AI insights, and performance. Implement targeted Redis cache invalidation on employee create/update/import events (cacheDelPattern). Emit socket events after every write that affects multi-module data so all connected clients see live updates. Audit all services to remove stale cache returns after data mutations.",
+      "status": "pending",
+      "assigned_to": "bakul",
+      "files_affected": [
+        "backend/src/services/employee.service.ts",
+        "backend/src/services/payEquity.service.ts",
+        "backend/src/services/salaryBand.service.ts",
+        "backend/src/services/dashboard.service.ts",
+        "backend/src/lib/redis.ts",
+        "backend/src/lib/socket.ts",
+        "shared/constants/index.ts",
+        "frontend/src/hooks/useSocket.ts"
+      ],
+      "risk_level": "high",
+      "clash_with": ["feat-007", "feat-008"],
+      "notes": "Touches Tier-1 files: redis.ts, socket.ts, shared/constants. Bakul owns all three. Do feat-002 before feat-008 since feat-008 builds on the cache invalidation infrastructure set up here."
+    },
+    {
+      "id": "feat-003",
+      "title": "Enhanced Dashboard — 4 Key Graphs + Action Panel",
+      "description": "Add 4 analytically meaningful charts beyond the current 2: (1) Compensation vs. Performance scatter plot (compa-ratio on X, performance rating on Y, sized by tenure), (2) Department-level pay equity heatmap (male vs female avg by dept), (3) RSU vesting timeline (monthly vesting events for next 12 months), (4) Attrition risk distribution bar chart (low/medium/high risk headcount). Add an 'Action Required' panel below KPIs listing newly detected gaps: employees outside band, gender pay gap > threshold, upcoming RSU cliff events, low performers with no action taken. All data live from DB.",
+      "status": "pending",
+      "assigned_to": "aryan",
+      "files_affected": [
+        "frontend/src/pages/DashboardPage.tsx",
+        "backend/src/controllers/dashboard.controller.ts",
+        "backend/src/services/dashboard.service.ts",
+        "backend/src/routes/dashboard.routes.ts",
+        "shared/types/index.ts"
+      ],
+      "risk_level": "medium",
+      "clash_with": ["feat-001", "feat-002", "feat-007"],
+      "notes": "DashboardPage.tsx clashes with feat-001 (Aryan owns both — do feat-001 first). dashboard.service.ts clashes with feat-002 (Bakul does cache invalidation there; Aryan adds new endpoints after). Coordinate with Bakul before touching dashboard.service.ts."
+    },
+    {
+      "id": "feat-004",
+      "title": "Auto Email Generation for Module Actions",
+      "description": "Build a reusable email service (nodemailer with SMTP config from env) and implement auto-email triggers: (1) Low performer alert from Performance tab — manager receives email listing direct reports below rating threshold with suggested actions; (2) Pay anomaly emails — HR lead notified when employee salary drifts outside band; (3) RSU cliff reminder — employee + manager emailed 30 days before first vest. Create HTML email templates. Add email config section (SMTP host, port, sender) to Platform Settings. Add 'Send Email' trigger buttons in Performance and Pay Equity pages.",
+      "status": "pending",
+      "assigned_to": "bakul",
+      "files_affected": [
+        "backend/src/services/email.service.ts",
+        "backend/src/lib/emailClient.ts",
+        "backend/src/routes/email.routes.ts",
+        "backend/src/controllers/performance.controller.ts",
+        "backend/src/routes/performance.routes.ts",
+        "backend/package.json",
+        "frontend/src/pages/PerformancePage.tsx",
+        "frontend/src/pages/SettingsPage.tsx",
+        "shared/types/index.ts"
+      ],
+      "risk_level": "medium",
+      "clash_with": ["feat-006"],
+      "notes": "SettingsPage.tsx clashes with feat-006 (Aryan splits it into two pages). Bakul should implement email config in SettingsPage BEFORE Aryan starts feat-006 so the email section gets migrated into PlatformSettingsPage correctly. backend/package.json addition needs immediate npm install by both devs."
+    },
+    {
+      "id": "feat-005",
+      "title": "Merged Module Navigation — Collapsible Grouped Sidebar",
+      "description": "Collapse the current flat 13-item sidebar into collapsible groups. Proposed grouping: Core (Dashboard, Notifications, AI Insights), Compensation (Salary Bands, Pay Equity, Variable Pay, RSU, Scenarios), People (Employees, Performance, Job Architecture). Each group has a header that collapses/expands. Active group auto-expands. Mobile: groups stack vertically. This complements feat-001's hub pages.",
+      "status": "pending",
+      "assigned_to": "aryan",
+      "files_affected": [
+        "frontend/src/App.tsx",
+        "frontend/src/components/layout/Sidebar.tsx",
+        "frontend/src/pages/DashboardPage.tsx"
+      ],
+      "risk_level": "high",
+      "clash_with": ["feat-001", "feat-003", "feat-006"],
+      "notes": "All 3 files clash with feat-001. Aryan owns both features. Do feat-001 first (hub page structure), then feat-005 (sidebar grouping). Do NOT start feat-005 until feat-001 is merged — they both rewrite Sidebar.tsx. Consider merging feat-001 + feat-005 into a single PR."
+    },
+    {
+      "id": "feat-006",
+      "title": "Dual Settings — Platform Settings + User Settings",
+      "description": "Split current SettingsPage.tsx into two dedicated pages. PlatformSettingsPage (admin-only): company name/currency/fiscal year, API connection status (Claude, DB, Redis), data management (export buttons), notification thresholds, email SMTP config. UserSettingsPage (all users): display name edit, password change (POST /api/auth/change-password), theme preference (dark/light), session info (last login, active sessions). Add two distinct sidebar links under a 'Settings' group. Gate PlatformSettingsPage to ADMIN role only.",
+      "status": "pending",
+      "assigned_to": "aryan",
+      "files_affected": [
+        "frontend/src/pages/SettingsPage.tsx",
+        "frontend/src/pages/UserSettingsPage.tsx",
+        "frontend/src/pages/PlatformSettingsPage.tsx",
+        "frontend/src/App.tsx",
+        "frontend/src/components/layout/Sidebar.tsx",
+        "backend/src/services/auth.service.ts",
+        "backend/src/routes/settings.routes.ts",
+        "backend/src/services/settings.service.ts",
+        "backend/src/app.ts",
+        "shared/types/index.ts"
+      ],
+      "risk_level": "high",
+      "clash_with": ["feat-001", "feat-004", "feat-005"],
+      "notes": "App.tsx + Sidebar.tsx clash with feat-001 + feat-005 (all Aryan). Do this LAST in Aryan's sequence after nav is stable. backend/src/app.ts is Tier-2 — discuss with Bakul before mounting new routes there. SettingsPage.tsx clashes with feat-004 — wait for Bakul to add email config section first, then migrate it."
+    },
+    {
+      "id": "feat-007",
+      "title": "Real-Time Data Only — Purge All Placeholders and Mock Values",
+      "description": "Full audit of every service file and frontend page for hardcoded values, placeholder text, fallback mock arrays, or static demo returns. All data must flow from live Prisma queries. AI insight prompts must aggregate real employee data before calling Claude — no static summaries. Ensure seed data is varied and realistic enough to produce meaningful analytics (not all employees in same band, realistic gender distribution, varied performance ratings). Remove any 'TODO: replace with real data' patterns.",
+      "status": "pending",
+      "assigned_to": "bakul",
+      "files_affected": [
+        "backend/src/services/aiInsights.service.ts",
+        "backend/src/services/dashboard.service.ts",
+        "backend/src/services/payEquity.service.ts",
+        "backend/src/services/performance.service.ts",
+        "backend/src/services/salaryBand.service.ts",
+        "backend/prisma/seed.ts",
+        "shared/constants/index.ts"
+      ],
+      "risk_level": "medium",
+      "clash_with": ["feat-002", "feat-003", "feat-008"],
+      "notes": "dashboard.service.ts clashes with feat-003 (Aryan adds new endpoints). Bakul should finish placeholder audit on dashboard.service.ts before Aryan extends it. shared/constants clashes with feat-002 + feat-008 (all Bakul — coordinate order: feat-002 → feat-007 → feat-008)."
+    },
+    {
+      "id": "feat-008",
+      "title": "Real-Time Calculation Logic — DB-Driven Salary Band Compliance",
+      "description": "Rewrite all compensation calculation logic to dynamically use SalaryBand records from the DB rather than hardcoded constants. Compa-ratio must reference actual SalaryBand.minSalary/midSalary/maxSalary for employee's band + jobArea combination. Pay equity outlier detection must use DB band ranges. Performance pay-alignment gap must use live band midpoints. computeAndUpdateDerivedFields() in employee.service must query SalaryBand table on every employee save. Trigger batch recalculation for ALL employees when a SalaryBand record is updated (socket broadcast + Redis invalidation).",
+      "status": "pending",
+      "assigned_to": "bakul",
+      "files_affected": [
+        "backend/src/services/employee.service.ts",
+        "backend/src/services/salaryBand.service.ts",
+        "backend/src/services/payEquity.service.ts",
+        "backend/src/services/performance.service.ts",
+        "backend/src/lib/redis.ts",
+        "backend/src/lib/socket.ts",
+        "shared/constants/index.ts",
+        "backend/prisma/schema.prisma"
+      ],
+      "risk_level": "high",
+      "clash_with": ["feat-002", "feat-007"],
+      "notes": "schema.prisma is Tier-1 — coordinate with Aryan before any model changes. redis.ts + socket.ts clash with feat-002 (both Bakul). Do feat-002 first to establish the cache invalidation pattern, then feat-007 to purge statics, then feat-008 to implement DB-driven calculations. This is the correct Bakul sequence."
+    }
+  ]
+}

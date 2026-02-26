@@ -1,6 +1,9 @@
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:3001';
+// In dev: connect to localhost:3001 directly (Vite doesn't proxy WebSocket for socket.io).
+// In tunnel/production: connect to the same origin (Express serves everything on one port).
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ||
+  (import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin);
 
 let socket: Socket | null = null;
 

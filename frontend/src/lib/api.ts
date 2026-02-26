@@ -1,6 +1,9 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 
-const BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+// In dev: Vite proxy forwards /api → localhost:3001, so relative path works.
+// In production / tunnel: Express serves the frontend, so /api is same-origin.
+// Either way, '/api' is always correct and no VITE_API_URL is needed.
+const BASE_URL = import.meta.env.VITE_API_URL || '/api';
 
 export const api = axios.create({
   baseURL: BASE_URL,

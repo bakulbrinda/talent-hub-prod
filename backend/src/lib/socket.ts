@@ -14,9 +14,15 @@ import { SOCKET_EVENTS } from '../types/index';
 let io: SocketServer;
 
 export const initializeSocket = (server: HttpServer): SocketServer => {
+  // Tunnel mode: no FRONTEND_URL set → allow all origins for demo sharing.
+  // Production: restrict to FRONTEND_URL.
+  const socketOrigin = process.env.FRONTEND_URL
+    ? [process.env.FRONTEND_URL, 'http://localhost:5173']
+    : true;
+
   io = new SocketServer(server, {
     cors: {
-      origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+      origin: socketOrigin,
       credentials: true,
     },
     pingTimeout: 60000,
