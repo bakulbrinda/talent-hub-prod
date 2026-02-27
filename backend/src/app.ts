@@ -22,6 +22,7 @@ import scenarioRoutes from './routes/scenarios.routes';
 import exportRoutes from './routes/export.routes';
 import importRoutes from './routes/import.routes';
 import emailRoutes from './routes/email.routes';
+import aiChatRoutes from './routes/aiChat.routes';
 
 const app = express();
 
@@ -101,6 +102,7 @@ app.use('/api/scenarios', scenarioRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/email', emailRoutes);
+app.use('/api/ai/chat', aiChatRoutes);
 
 // ─── 404 for unknown API routes ───────────────────────────────
 app.use('/api/*', (_req, res) => {

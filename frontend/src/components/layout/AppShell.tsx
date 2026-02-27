@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from './Sidebar';
 import { TopBar } from './TopBar';
 import { useSocket } from '../../hooks/useSocket';
+import { ChatPanel } from '../ChatPanel';
 
 export function AppShell() {
   // Initialize socket connection
@@ -17,6 +18,8 @@ export function AppShell() {
           <Outlet />
         </div>
       </main>
+      {/* Floating AI chat — available on every page */}
+      <ChatPanel />
     </div>
   );
 }
