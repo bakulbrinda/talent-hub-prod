@@ -1,24 +1,14 @@
+import { useState, useEffect } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard,
-  Layers,
-  Users,
-  BarChart3,
-  Scale,
-  Sparkles,
-  Gift,
-  TrendingUp,
-  Award,
-  Zap,
-  FlaskConical,
-  Bell,
-  Settings,
+  LayoutDashboard, Users, BarChart3, Scale, Sparkles, Gift,
+  TrendingUp, Award, Zap, FlaskConical, Bell, Settings,
+  ChevronDown, DollarSign, Layers, Building2,
 } from 'lucide-react';
+import { cn } from '../../lib/utils';
+import { useNotificationStore } from '../../store/notificationStore';
 
 function IMochaIcon({ size = 28 }: { size?: number }) {
-  // 3-segment ring icon matching the iMocha brand mark
-  // r=9.5, circumference≈59.7, segment=15, gap=5  (3×(15+5)=60≈59.7 ✓)
-  // rotate(-130) places the first gap at ~1:30-2:30 o'clock (top-right)
   const r = 9.5;
   return (
     <svg width={size} height={size} viewBox="0 0 28 28" fill="none">
@@ -28,47 +18,118 @@ function IMochaIcon({ size = 28 }: { size?: number }) {
         strokeDasharray="15 5 15 5 15 5"
         transform="rotate(-130 14 14)"
       />
-      {/* Dot at gap centre (~60° from 12 o'clock = top-right) */}
       <circle cx="22" cy="9" r="2.5" fill="#F56521" />
     </svg>
   );
 }
-import { cn } from '../../lib/utils';
-import { useNotificationStore } from '../../store/notificationStore';
 
 interface NavItem {
   path: string;
   label: string;
   icon: React.ElementType;
-  badge?: number;
 }
 
-const navItems: NavItem[] = [
-  { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/job-architecture', label: 'Job Architecture', icon: Layers },
-  { path: '/employees', label: 'Employees', icon: Users },
-  { path: '/salary-bands', label: 'Salary Bands', icon: BarChart3 },
-  { path: '/pay-equity', label: 'Pay Equity', icon: Scale },
-  { path: '/ai-insights', label: 'AI Insights', icon: Sparkles },
-  { path: '/benefits', label: 'Benefits', icon: Gift },
-  { path: '/rsu', label: 'RSU Tracker', icon: Award },
-  { path: '/performance', label: 'Performance', icon: TrendingUp },
-  { path: '/variable-pay', label: 'Variable Pay', icon: Zap },
-  { path: '/scenarios', label: 'Scenario Modeler', icon: FlaskConical },
-  { path: '/notifications', label: 'Notifications', icon: Bell },
-  { path: '/settings', label: 'Settings', icon: Settings },
+interface NavGroup {
+  id: string;
+  label: string;
+  icon: React.ElementType;
+  items: NavItem[];
+}
+
+const NAV_GROUPS: NavGroup[] = [
+  {
+    id: 'core',
+    label: 'Core',
+    icon: LayoutDashboard,
+    items: [
+      { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+      { path: '/ai-insights', label: 'AI Insights', icon: Sparkles },
+      { path: '/notifications', label: 'Notifications', icon: Bell },
+    ],
+  },
+  {
+    id: 'compensation',
+    label: 'Compensation',
+    icon: DollarSign,
+    items: [
+      { path: '/compensation', label: 'Hub Overview', icon: Building2 },
+      { path: '/salary-bands', label: 'Salary Bands', icon: BarChart3 },
+      { path: '/pay-equity', label: 'Pay Equity', icon: Scale },
+      { path: '/variable-pay', label: 'Variable Pay', icon: Zap },
+      { path: '/rsu', label: 'RSU Tracker', icon: Award },
+      { path: '/scenarios', label: 'Scenarios', icon: FlaskConical },
+    ],
+  },
+  {
+    id: 'people',
+    label: 'People',
+    icon: Users,
+    items: [
+      { path: '/employees', label: 'Employees', icon: Users },
+      { path: '/job-architecture', label: 'Job Architecture', icon: Layers },
+      { path: '/performance', label: 'Performance', icon: TrendingUp },
+    ],
+  },
+  {
+    id: 'benefits',
+    label: 'Benefits',
+    icon: Gift,
+    items: [
+      { path: '/benefits-hub', label: 'Hub Overview', icon: Building2 },
+      { path: '/benefits', label: 'Benefits Mgmt', icon: Gift },
+    ],
+  },
+  {
+    id: 'settings',
+    label: 'Settings',
+    icon: Settings,
+    items: [
+      { path: '/settings/platform', label: 'Platform Settings', icon: Settings },
+      { path: '/settings/user', label: 'User Settings', icon: Users },
+    ],
+  },
 ];
+
+function getActiveGroupId(pathname: string): string {
+  for (const group of NAV_GROUPS) {
+    for (const item of group.items) {
+      const isActive =
+        item.path === '/dashboard'
+          ? pathname === '/dashboard'
+          : pathname.startsWith(item.path);
+      if (isActive) return group.id;
+    }
+  }
+  return 'core';
+}
 
 export function Sidebar() {
   const location = useLocation();
   const { unreadCount } = useNotificationStore();
+
+  const activeGroupId = getActiveGroupId(location.pathname);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set([activeGroupId]));
+
+  // Auto-expand the active group when route changes
+  useEffect(() => {
+    setExpandedGroups(prev => new Set([...prev, activeGroupId]));
+  }, [activeGroupId]);
+
+  const toggleGroup = (groupId: string) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      return next;
+    });
+  };
 
   return (
     <aside
       className={cn(
         'fixed left-0 top-0 h-screen flex flex-col z-40 group',
         'bg-[hsl(var(--sidebar))] border-r border-[hsl(var(--sidebar-border))]',
-        'w-16 hover:w-60 transition-all duration-300 overflow-hidden'
+        'w-16 hover:w-64 transition-all duration-300 overflow-hidden'
       )}
     >
       {/* Logo */}
@@ -81,46 +142,31 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-3 sidebar-scroll">
-        <ul className="space-y-0.5 px-2">
-          {navItems.map((item) => {
-            const Icon = item.icon;
-            const isActive =
-              item.path === '/dashboard'
-                ? location.pathname === '/dashboard'
-                : location.pathname.startsWith(item.path);
-            const badge =
-              item.path === '/notifications' ? unreadCount : undefined;
+      {/* Nav — collapsed mode (icon only, one per group) */}
+      <nav className="flex-1 overflow-y-auto py-3 sidebar-scroll group-hover:hidden">
+        <ul className="space-y-1 px-2">
+          {NAV_GROUPS.map(group => {
+            const GroupIcon = group.icon;
+            const isGroupActive = group.id === activeGroupId;
+            const firstPath = group.items[0].path;
+            const notifBadge = group.id === 'core' && unreadCount > 0 ? unreadCount : undefined;
 
             return (
-              <li key={item.path}>
+              <li key={group.id}>
                 <NavLink
-                  to={item.path}
-                  title={item.label}
+                  to={firstPath}
+                  title={group.label}
                   className={cn(
-                    'flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm transition-all duration-150',
-                    isActive
-                      ? 'bg-[hsl(var(--sidebar-accent)/0.15)] text-[hsl(var(--sidebar-accent))] font-medium'
+                    'flex items-center justify-center w-10 h-10 mx-auto rounded-lg transition-all relative',
+                    isGroupActive
+                      ? 'bg-[hsl(var(--sidebar-accent)/0.15)] text-[hsl(var(--sidebar-accent))]'
                       : 'text-[hsl(var(--sidebar-foreground)/0.65)] hover:text-[hsl(var(--sidebar-foreground))] hover:bg-white/5'
                   )}
                 >
-                  <div className="relative flex-shrink-0">
-                    <Icon
-                      className={cn('w-4 h-4', isActive && 'text-[hsl(var(--sidebar-accent))]')}
-                    />
-                    {badge !== undefined && badge > 0 && (
-                      <span className="absolute -top-1.5 -right-1.5 min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-0.5">
-                        {badge > 99 ? '99+' : badge}
-                      </span>
-                    )}
-                  </div>
-                  <span className="truncate flex-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                    {item.label}
-                  </span>
-                  {badge !== undefined && badge > 0 && (
-                    <span className="ml-auto min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                      {badge > 99 ? '99+' : badge}
+                  <GroupIcon className="w-4 h-4" />
+                  {notifBadge !== undefined && (
+                    <span className="absolute -top-1 -right-1 min-w-[14px] h-[14px] rounded-full bg-red-500 text-white text-[9px] font-bold flex items-center justify-center px-0.5">
+                      {notifBadge > 99 ? '99+' : notifBadge}
                     </span>
                   )}
                 </NavLink>
@@ -128,6 +174,74 @@ export function Sidebar() {
             );
           })}
         </ul>
+      </nav>
+
+      {/* Nav — expanded mode (grouped with collapsible headers) */}
+      <nav className="flex-1 overflow-y-auto py-2 sidebar-scroll hidden group-hover:block">
+        <div className="space-y-1 px-2">
+          {NAV_GROUPS.map(group => {
+            const GroupIcon = group.icon;
+            const isGroupActive = group.id === activeGroupId;
+            const isExpanded = expandedGroups.has(group.id);
+
+            return (
+              <div key={group.id}>
+                {/* Group header */}
+                <button
+                  onClick={() => toggleGroup(group.id)}
+                  className={cn(
+                    'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all',
+                    isGroupActive
+                      ? 'text-[hsl(var(--sidebar-accent))]'
+                      : 'text-[hsl(var(--sidebar-foreground)/0.45)] hover:text-[hsl(var(--sidebar-foreground)/0.75)]'
+                  )}
+                >
+                  <GroupIcon className="w-3.5 h-3.5 flex-shrink-0" />
+                  <span className="flex-1 text-left whitespace-nowrap">{group.label}</span>
+                  <ChevronDown
+                    className={cn('w-3 h-3 transition-transform duration-200 flex-shrink-0', !isExpanded && '-rotate-90')}
+                  />
+                </button>
+
+                {/* Group items */}
+                {isExpanded && (
+                  <ul className="space-y-0.5 mt-0.5 mb-1 pl-1">
+                    {group.items.map(item => {
+                      const Icon = item.icon;
+                      const isActive =
+                        item.path === '/dashboard'
+                          ? location.pathname === '/dashboard'
+                          : location.pathname.startsWith(item.path);
+                      const badge = item.path === '/notifications' ? unreadCount : undefined;
+
+                      return (
+                        <li key={item.path}>
+                          <NavLink
+                            to={item.path}
+                            className={cn(
+                              'flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-sm transition-all whitespace-nowrap',
+                              isActive
+                                ? 'bg-[hsl(var(--sidebar-accent)/0.15)] text-[hsl(var(--sidebar-accent))] font-medium'
+                                : 'text-[hsl(var(--sidebar-foreground)/0.65)] hover:text-[hsl(var(--sidebar-foreground))] hover:bg-white/5'
+                            )}
+                          >
+                            <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                            <span className="flex-1 truncate">{item.label}</span>
+                            {badge !== undefined && badge > 0 && (
+                              <span className="min-w-[18px] h-[18px] rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center px-1">
+                                {badge > 99 ? '99+' : badge}
+                              </span>
+                            )}
+                          </NavLink>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </nav>
 
       {/* iMocha branding footer */}

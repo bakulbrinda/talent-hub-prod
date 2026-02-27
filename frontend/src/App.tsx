@@ -21,6 +21,10 @@ const VariablePayPage = lazy(() => import('./pages/VariablePayPage'));
 const ScenarioModelerPage = lazy(() => import('./pages/ScenarioModelerPage'));
 const NotificationsCenterPage = lazy(() => import('./pages/NotificationsCenterPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+const CompensationHubPage = lazy(() => import('./pages/CompensationHubPage'));
+const BenefitsHubPage = lazy(() => import('./pages/BenefitsHubPage'));
+const PlatformSettingsPage = lazy(() => import('./pages/PlatformSettingsPage'));
+const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-screen bg-background">
@@ -62,6 +66,10 @@ function AppRoutes() {
           <Route path="scenarios" element={<ScenarioModelerPage />} />
           <Route path="notifications" element={<NotificationsCenterPage />} />
           <Route path="settings" element={<SettingsPage />} />
+          <Route path="settings/platform" element={<PlatformSettingsPage />} />
+          <Route path="settings/user" element={<UserSettingsPage />} />
+          <Route path="compensation" element={<CompensationHubPage />} />
+          <Route path="benefits-hub" element={<BenefitsHubPage />} />
         </Route>
 
         {/* Catch-all — send to login, ProtectedRoute handles auth check */}

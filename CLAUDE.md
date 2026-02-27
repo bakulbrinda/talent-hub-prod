@@ -280,12 +280,12 @@ cloudflared tunnel --url http://localhost:3001 >> /tmp/cloudflared.log 2>&1 &
 
 | ID | Title | Assigned | Risk | Status |
 |---|---|---|---|---|
-| feat-001 | Platform Navigation Restructuring — 3-Module Hub | Aryan | HIGH | pending |
+| feat-001 | Platform Navigation Restructuring — 3-Module Hub | Bakul | HIGH | done ✅ |
 | feat-002 | Real-Time Data Flow Accuracy Across All Modules | Bakul | HIGH | done ✅ |
-| feat-003 | Enhanced Dashboard — 4 Key Graphs + Action Panel | Aryan | MEDIUM | pending |
+| feat-003 | Enhanced Dashboard — 4 Key Graphs + Action Panel | Bakul | MEDIUM | done ✅ |
 | feat-004 | Auto Email Generation for Module Actions | Bakul | MEDIUM | done ✅ |
-| feat-005 | Merged Module Navigation — Collapsible Grouped Sidebar | Aryan | HIGH | pending |
-| feat-006 | Dual Settings — Platform Settings + User Settings | Aryan | HIGH | pending |
+| feat-005 | Merged Module Navigation — Collapsible Grouped Sidebar | Bakul | HIGH | done ✅ |
+| feat-006 | Dual Settings — Platform Settings + User Settings | Bakul | HIGH | done ✅ |
 | feat-007 | Real-Time Data Only — Purge All Placeholders | Bakul | MEDIUM | done ✅ |
 | feat-008 | Real-Time Calculation Logic — DB-Driven Salary Band Compliance | Bakul | HIGH | done ✅ |
 
@@ -318,20 +318,9 @@ Order: `feat-001` → `feat-005` → `feat-003` → `feat-006`
 > Update this section before starting any feature. Clear it when done.
 > Full queue is in the Planned Features table above — pick next from your assigned sequence.
 
-### Dev A — Aryan
+### Dev A — Bakul
 ```
-Feature  : feat-001 + feat-005 (start here — do together in one PR)
-Files    : frontend/src/App.tsx, frontend/src/components/layout/Sidebar.tsx,
-           frontend/src/pages/DashboardPage.tsx,
-           frontend/src/pages/CompensationHubPage.tsx (new),
-           frontend/src/pages/BenefitsHubPage.tsx (new)
-Branch   : (your branch name)
-Started  : (date)
-```
-
-### Dev B — Bakul
-```
-Feature  : ALL DONE ✅ (feat-002, feat-004, feat-007, feat-008)
+Feature  : ALL FEATURES COMPLETE ✅ (feat-001 through feat-008, all 8 features done)
 Files    : —
 Branch   : main
 Started  : —

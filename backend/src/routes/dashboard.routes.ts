@@ -11,5 +11,10 @@ router.get('/salary-distribution', ctrl.getSalaryDistribution);
 router.get('/compensation-trend', ctrl.getCompensationTrend);
 router.get('/pay-equity-summary', ctrl.getPayEquitySummary);
 router.get('/ai-summary', ctrl.getAiSummary);
+router.get('/comp-vs-performance', ctrl.getCompVsPerformancePlot);
+router.get('/dept-pay-equity-heatmap', ctrl.getDeptPayEquityHeatmap);
+router.get('/rsu-vesting-timeline', ctrl.getRsuVestingTimeline);
+router.get('/attrition-risk', ctrl.getAttritionRiskDistribution);
+router.get('/action-required', ctrl.getActionRequired);
 
 export default router;

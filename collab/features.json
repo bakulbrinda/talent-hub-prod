@@ -4,8 +4,8 @@
       "id": "feat-001",
       "title": "Platform Navigation Restructuring — 3-Module Hub",
       "description": "Restructure the platform so Dashboard, Compensation & Pay, and Benefits are the 3 primary entry points. All sub-modules navigate FROM these hubs. Create CompensationHubPage (groups: salary bands, pay equity, variable pay, RSU, scenarios) and BenefitsHubPage (groups: benefits catalog, enrollments, utilization). Sidebar collapses to 3 primary sections. Quick-nav cards on Dashboard act as the launch pad.",
-      "status": "pending",
-      "assigned_to": "aryan",
+      "status": "done",
+      "assigned_to": "bakul",
       "files_affected": [
         "frontend/src/App.tsx",
         "frontend/src/components/layout/Sidebar.tsx",
@@ -41,8 +41,8 @@
       "id": "feat-003",
       "title": "Enhanced Dashboard — 4 Key Graphs + Action Panel",
       "description": "Add 4 analytically meaningful charts beyond the current 2: (1) Compensation vs. Performance scatter plot (compa-ratio on X, performance rating on Y, sized by tenure), (2) Department-level pay equity heatmap (male vs female avg by dept), (3) RSU vesting timeline (monthly vesting events for next 12 months), (4) Attrition risk distribution bar chart (low/medium/high risk headcount). Add an 'Action Required' panel below KPIs listing newly detected gaps: employees outside band, gender pay gap > threshold, upcoming RSU cliff events, low performers with no action taken. All data live from DB.",
-      "status": "pending",
-      "assigned_to": "aryan",
+      "status": "done",
+      "assigned_to": "bakul",
       "files_affected": [
         "frontend/src/pages/DashboardPage.tsx",
         "backend/src/controllers/dashboard.controller.ts",
@@ -79,8 +79,8 @@
       "id": "feat-005",
       "title": "Merged Module Navigation — Collapsible Grouped Sidebar",
       "description": "Collapse the current flat 13-item sidebar into collapsible groups. Proposed grouping: Core (Dashboard, Notifications, AI Insights), Compensation (Salary Bands, Pay Equity, Variable Pay, RSU, Scenarios), People (Employees, Performance, Job Architecture). Each group has a header that collapses/expands. Active group auto-expands. Mobile: groups stack vertically. This complements feat-001's hub pages.",
-      "status": "pending",
-      "assigned_to": "aryan",
+      "status": "done",
+      "assigned_to": "bakul",
       "files_affected": [
         "frontend/src/App.tsx",
         "frontend/src/components/layout/Sidebar.tsx",
@@ -94,8 +94,8 @@
       "id": "feat-006",
       "title": "Dual Settings — Platform Settings + User Settings",
       "description": "Split current SettingsPage.tsx into two dedicated pages. PlatformSettingsPage (admin-only): company name/currency/fiscal year, API connection status (Claude, DB, Redis), data management (export buttons), notification thresholds, email SMTP config. UserSettingsPage (all users): display name edit, password change (POST /api/auth/change-password), theme preference (dark/light), session info (last login, active sessions). Add two distinct sidebar links under a 'Settings' group. Gate PlatformSettingsPage to ADMIN role only.",
-      "status": "pending",
-      "assigned_to": "aryan",
+      "status": "done",
+      "assigned_to": "bakul",
       "files_affected": [
         "frontend/src/pages/SettingsPage.tsx",
         "frontend/src/pages/UserSettingsPage.tsx",

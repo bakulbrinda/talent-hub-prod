@@ -78,6 +78,18 @@ export const authService = {
     return { id: user.id, email: user.email, name: user.name, role: user.role };
   },
 
+  async changePassword(userId: string, currentPassword: string, newPassword: string) {
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) throw unauthorized('User not found');
+    const valid = await bcrypt.compare(currentPassword, user.password);
+    if (!valid) throw unauthorized('Current password is incorrect');
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    await prisma.user.update({ where: { id: userId }, data: { password: hashedPassword } });
+    // Revoke all refresh tokens for security
+    await prisma.refreshToken.deleteMany({ where: { userId } });
+    return { message: 'Password changed. Please log in again.' };
+  },
+
   async createUser(email: string, password: string, name: string) {
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) throw badRequest('Email already registered');

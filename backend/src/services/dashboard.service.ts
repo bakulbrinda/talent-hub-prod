@@ -113,4 +113,143 @@ export const dashboardService = {
       .sort((a, b) => Math.abs(b.gapPercent) - Math.abs(a.gapPercent))
       .slice(0, 3);
   }),
+
+  // ── feat-003 new endpoints ─────────────────────────────────────
+
+  getCompVsPerformancePlot: () => cached('dashboard:comp-vs-perf', async () => {
+    const employees = await prisma.employee.findMany({
+      where: { employmentStatus: 'ACTIVE', compaRatio: { not: null } },
+      select: {
+        firstName: true, lastName: true, compaRatio: true, band: true,
+        department: true, dateOfJoining: true,
+        performanceRatings: { orderBy: { cycle: 'desc' }, take: 1 },
+      },
+    });
+    const now = new Date();
+    return employees
+      .filter(e => e.performanceRatings.length > 0)
+      .map(e => {
+        const tenureMonths = Math.floor(
+          (now.getTime() - new Date(e.dateOfJoining).getTime()) / (1000 * 60 * 60 * 24 * 30)
+        );
+        return {
+          name: `${e.firstName} ${e.lastName}`,
+          compaRatio: Number(e.compaRatio),
+          performanceRating: Number(e.performanceRatings[0].rating),
+          tenureMonths,
+          band: e.band,
+          department: e.department,
+        };
+      });
+  }),
+
+  getDeptPayEquityHeatmap: () => cached('dashboard:equity-heatmap', async () => {
+    const rows = await prisma.employee.groupBy({
+      by: ['department', 'gender'],
+      where: { employmentStatus: 'ACTIVE' },
+      _avg: { annualFixed: true },
+      _count: true,
+    });
+    const deptMap: Record<string, { male: number; female: number; maleCount: number; femaleCount: number }> = {};
+    for (const row of rows) {
+      if (!deptMap[row.department]) deptMap[row.department] = { male: 0, female: 0, maleCount: 0, femaleCount: 0 };
+      if (row.gender === 'MALE') { deptMap[row.department].male = Number(row._avg.annualFixed); deptMap[row.department].maleCount = row._count; }
+      if (row.gender === 'FEMALE') { deptMap[row.department].female = Number(row._avg.annualFixed); deptMap[row.department].femaleCount = row._count; }
+    }
+    return Object.entries(deptMap)
+      .map(([dept, v]) => ({
+        department: dept,
+        maleAvg: v.male,
+        femaleAvg: v.female,
+        maleCount: v.maleCount,
+        femaleCount: v.femaleCount,
+        gapPercent: v.male > 0 ? ((v.male - v.female) / v.male) * 100 : 0,
+      }))
+      .sort((a, b) => Math.abs(b.gapPercent) - Math.abs(a.gapPercent));
+  }),
+
+  getRsuVestingTimeline: () => cached('dashboard:rsu-timeline', async () => {
+    const now = new Date();
+    const cutoff = new Date(now.getFullYear(), now.getMonth() + 12, 1);
+    const events = await prisma.rsuVestingEvent.findMany({
+      where: { vestingDate: { gte: now, lt: cutoff }, isVested: false },
+      include: { rsuGrant: { select: { currentPrice: true, priceAtGrant: true } } },
+    });
+    const monthMap: Record<string, { count: number; units: number; approxValue: number }> = {};
+    for (const ev of events) {
+      const d = new Date(ev.vestingDate);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthMap[key]) monthMap[key] = { count: 0, units: 0, approxValue: 0 };
+      monthMap[key].count++;
+      monthMap[key].units += ev.unitsVesting;
+      const price = Number(ev.rsuGrant.currentPrice ?? ev.rsuGrant.priceAtGrant ?? 0);
+      monthMap[key].approxValue += ev.unitsVesting * price;
+    }
+    const result = [];
+    for (let i = 0; i < 12; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      result.push({
+        month: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
+        count: monthMap[key]?.count ?? 0,
+        units: monthMap[key]?.units ?? 0,
+        approxValue: monthMap[key]?.approxValue ?? 0,
+      });
+    }
+    return result;
+  }),
+
+  getAttritionRiskDistribution: () => cached('dashboard:attrition-risk', async () => {
+    const employees = await prisma.employee.findMany({
+      where: { employmentStatus: 'ACTIVE' },
+      select: { attritionRiskScore: true },
+    });
+    let low = 0, medium = 0, high = 0;
+    for (const emp of employees) {
+      const score = Number(emp.attritionRiskScore) ?? 0;
+      if (score < 33) low++;
+      else if (score < 66) medium++;
+      else high++;
+    }
+    return [
+      { risk: 'Low', count: low },
+      { risk: 'Medium', count: medium },
+      { risk: 'High', count: high },
+    ];
+  }),
+
+  getActionRequired: () => cached('dashboard:action-required', async () => {
+    const thirtyDaysOut = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+    const [outsideBand, deptRows, upcomingVesting, lowPerfCount] = await Promise.all([
+      prisma.employee.count({
+        where: { employmentStatus: 'ACTIVE', OR: [{ compaRatio: { lt: 80 } }, { compaRatio: { gt: 120 } }] },
+      }),
+      prisma.employee.groupBy({
+        by: ['department', 'gender'],
+        where: { employmentStatus: 'ACTIVE' },
+        _avg: { annualFixed: true },
+      }),
+      prisma.rsuVestingEvent.count({
+        where: { isVested: false, vestingDate: { gte: new Date(), lt: thirtyDaysOut } },
+      }),
+      prisma.performanceRating.count({ where: { rating: { lt: 3 } } }),
+    ]);
+
+    const deptMap: Record<string, { male: number; female: number }> = {};
+    for (const row of deptRows) {
+      if (!deptMap[row.department]) deptMap[row.department] = { male: 0, female: 0 };
+      if (row.gender === 'MALE') deptMap[row.department].male = Number(row._avg.annualFixed);
+      if (row.gender === 'FEMALE') deptMap[row.department].female = Number(row._avg.annualFixed);
+    }
+    const highGapDepts = Object.values(deptMap).filter(
+      v => v.male > 0 && ((v.male - v.female) / v.male) * 100 > 15
+    ).length;
+
+    const items: { type: string; severity: 'high' | 'medium'; message: string; link: string; count: number }[] = [];
+    if (outsideBand > 0) items.push({ type: 'band', severity: 'high', message: `${outsideBand} employee${outsideBand !== 1 ? 's' : ''} outside salary band`, link: '/salary-bands', count: outsideBand });
+    if (highGapDepts > 0) items.push({ type: 'equity', severity: 'high', message: `${highGapDepts} department${highGapDepts !== 1 ? 's' : ''} with gender pay gap > 15%`, link: '/pay-equity', count: highGapDepts });
+    if (upcomingVesting > 0) items.push({ type: 'rsu', severity: 'medium', message: `${upcomingVesting} RSU vesting event${upcomingVesting !== 1 ? 's' : ''} in the next 30 days`, link: '/rsu', count: upcomingVesting });
+    if (lowPerfCount > 0) items.push({ type: 'performance', severity: 'medium', message: `${lowPerfCount} employee${lowPerfCount !== 1 ? 's' : ''} with performance rating below 3.0`, link: '/performance', count: lowPerfCount });
+    return items;
+  }),
 };

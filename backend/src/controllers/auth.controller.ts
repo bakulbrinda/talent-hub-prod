@@ -2,6 +2,11 @@ import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { authService } from '../services/auth.service';
 
+const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, 'Current password is required'),
+  newPassword: z.string().min(8, 'New password must be at least 8 characters'),
+});
+
 const loginSchema = z.object({
   email: z.string().email('Invalid email format'),
   password: z.string().min(1, 'Password is required'),
@@ -47,6 +52,16 @@ export const authController = {
       const userId = req.user!.userId;
       const user = await authService.getMe(userId);
       res.json({ data: user });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async changePassword(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { currentPassword, newPassword } = changePasswordSchema.parse(req.body);
+      const result = await authService.changePassword(req.user!.userId, currentPassword, newPassword);
+      res.json({ data: result });
     } catch (err) {
       next(err);
     }

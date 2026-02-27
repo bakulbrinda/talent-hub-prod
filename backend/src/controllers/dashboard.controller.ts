@@ -24,4 +24,19 @@ export const dashboardController = {
       res.json({ data: { summary } });
     } catch (e) { next(e); }
   },
+  getCompVsPerformancePlot: async (_req: Request, res: Response, next: NextFunction) => {
+    try { res.json({ data: await dashboardService.getCompVsPerformancePlot() }); } catch (e) { next(e); }
+  },
+  getDeptPayEquityHeatmap: async (_req: Request, res: Response, next: NextFunction) => {
+    try { res.json({ data: await dashboardService.getDeptPayEquityHeatmap() }); } catch (e) { next(e); }
+  },
+  getRsuVestingTimeline: async (_req: Request, res: Response, next: NextFunction) => {
+    try { res.json({ data: await dashboardService.getRsuVestingTimeline() }); } catch (e) { next(e); }
+  },
+  getAttritionRiskDistribution: async (_req: Request, res: Response, next: NextFunction) => {
+    try { res.json({ data: await dashboardService.getAttritionRiskDistribution() }); } catch (e) { next(e); }
+  },
+  getActionRequired: async (_req: Request, res: Response, next: NextFunction) => {
+    try { res.json({ data: await dashboardService.getActionRequired() }); } catch (e) { next(e); }
+  },
 };
