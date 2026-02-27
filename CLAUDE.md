@@ -34,6 +34,7 @@
 | AI | @anthropic-ai/sdk | ^0.30.0 |
 | Auth | jsonwebtoken + bcryptjs | — |
 | File Upload | multer + csv-parse + xlsx | — |
+| Email | nodemailer | ^6.x |
 | Logging | winston | ^3.15.0 |
 | Validation | zod | ^3.23.8 |
 
@@ -228,6 +229,12 @@ ANTHROPIC_API_KEY # sk-ant-api03-...
 PORT              # 3001
 FRONTEND_URL      # Empty string in tunnel/dev mode = allow all CORS origins
 NODE_ENV          # development | production
+# Email (feat-004) — all optional; app runs fine without them
+SMTP_HOST         # e.g. smtp.gmail.com
+SMTP_PORT         # 587
+SMTP_USER         # sender email address
+SMTP_PASS         # sender email password / app password
+HR_ALERT_EMAIL    # receives pay anomaly alerts
 ```
 
 ### Frontend (`frontend/.env`)
@@ -276,29 +283,33 @@ cloudflared tunnel --url http://localhost:3001 >> /tmp/cloudflared.log 2>&1 &
 | feat-001 | Platform Navigation Restructuring — 3-Module Hub | Aryan | HIGH | pending |
 | feat-002 | Real-Time Data Flow Accuracy Across All Modules | Bakul | HIGH | done ✅ |
 | feat-003 | Enhanced Dashboard — 4 Key Graphs + Action Panel | Aryan | MEDIUM | pending |
-| feat-004 | Auto Email Generation for Module Actions | Bakul | MEDIUM | pending |
+| feat-004 | Auto Email Generation for Module Actions | Bakul | MEDIUM | done ✅ |
 | feat-005 | Merged Module Navigation — Collapsible Grouped Sidebar | Aryan | HIGH | pending |
 | feat-006 | Dual Settings — Platform Settings + User Settings | Aryan | HIGH | pending |
-| feat-007 | Real-Time Data Only — Purge All Placeholders | Bakul | MEDIUM | pending |
-| feat-008 | Real-Time Calculation Logic — DB-Driven Salary Band Compliance | Bakul | HIGH | pending |
+| feat-007 | Real-Time Data Only — Purge All Placeholders | Bakul | MEDIUM | done ✅ |
+| feat-008 | Real-Time Calculation Logic — DB-Driven Salary Band Compliance | Bakul | HIGH | done ✅ |
 
-### Recommended Execution Order
+### Execution Status
 
-**Aryan:** `feat-001` → `feat-005` → `feat-003` → `feat-006`
-- feat-001 rewrites Sidebar + App.tsx. feat-005 extends them (do in same PR or immediately after).
-- feat-003 adds new dashboard charts — wait for feat-001 to stabilize DashboardPage first.
-- feat-006 splits SettingsPage — do last, after Bakul ships email config section (feat-004).
+**Bakul — ALL DONE ✅**
+- feat-002 ✅ cache invalidation + socket events
+- feat-007 ✅ purged wrong bandOrder arrays, unified SOCKET_EVENTS constants
+- feat-008 ✅ DB-driven compa-ratio + batch recalc on SalaryBand update
+- feat-004 ✅ email service (nodemailer), 3 triggers, SMTP config in Settings
 
-**Bakul:** `feat-002` → `feat-007` → `feat-008`  ∥  `feat-004` (can run in parallel with feat-007)
-- feat-002 establishes cache invalidation infrastructure. feat-007 + feat-008 build on top of it.
-- feat-004 (email service) is isolated new files — safe to work on alongside feat-007.
+**Aryan — START NOW**
+Order: `feat-001` → `feat-005` → `feat-003` → `feat-006`
+- feat-001: create CompensationHubPage + BenefitsHubPage, restructure App.tsx routes
+- feat-005: rewrite Sidebar.tsx into collapsible grouped nav (do in same PR as feat-001)
+- feat-003: extend dashboard.service.ts with 4 new endpoints + DashboardPage charts
+- feat-006: split SettingsPage.tsx into PlatformSettingsPage + UserSettingsPage (do LAST)
 
-### Cross-Dev Handoff Points
+### Cross-Dev Handoff Points — COMPLETED
 
-| File | Bakul does first | Then Aryan does |
+| File | What Bakul did | What Aryan must do next |
 |---|---|---|
-| `backend/src/services/dashboard.service.ts` | Cache invalidation (feat-002) + data audit (feat-007) | New endpoint methods (feat-003) |
-| `frontend/src/pages/SettingsPage.tsx` | Add email config section (feat-004) | Split into two pages (feat-006) |
+| `backend/src/services/dashboard.service.ts` | ✅ Cache invalidation + bandOrder fix (feat-002, feat-007) | Add new chart endpoints (feat-003) |
+| `frontend/src/pages/SettingsPage.tsx` | ✅ Email SMTP tab + 3 trigger buttons (feat-004) | Split into PlatformSettingsPage + UserSettingsPage (feat-006) — preserve the Email tab in PlatformSettingsPage |
 
 ---
 
@@ -309,19 +320,86 @@ cloudflared tunnel --url http://localhost:3001 >> /tmp/cloudflared.log 2>&1 &
 
 ### Dev A — Aryan
 ```
-Feature  : (empty)
-Files    : (empty)
-Branch   : (empty)
-Started  : (empty)
+Feature  : feat-001 + feat-005 (start here — do together in one PR)
+Files    : frontend/src/App.tsx, frontend/src/components/layout/Sidebar.tsx,
+           frontend/src/pages/DashboardPage.tsx,
+           frontend/src/pages/CompensationHubPage.tsx (new),
+           frontend/src/pages/BenefitsHubPage.tsx (new)
+Branch   : (your branch name)
+Started  : (date)
 ```
 
 ### Dev B — Bakul
 ```
-Feature  : (empty)
-Files    : (empty)
-Branch   : (empty)
-Started  : (empty)
+Feature  : ALL DONE ✅ (feat-002, feat-004, feat-007, feat-008)
+Files    : —
+Branch   : main
+Started  : —
 ```
+
+---
+
+## Aryan's Reference — What Bakul Already Built
+
+> Read this before starting any feature so you don't duplicate work or break existing flows.
+
+### Email Infrastructure (feat-004) — Already Live
+
+New routes at `/api/email` (all require `authenticate` middleware):
+
+| Method | Endpoint | What it does |
+|---|---|---|
+| POST | `/api/email/low-performer-alert` | Sends alerts to managers with direct reports rated < 3.0 |
+| POST | `/api/email/pay-anomaly-alert` | Sends pay outlier summary to `HR_ALERT_EMAIL` |
+| POST | `/api/email/rsu-reminders` | Emails employees with RSU vesting in next 30 days |
+
+New files — **do not duplicate**:
+- `backend/src/lib/emailClient.ts` — nodemailer transporter (gracefully no-ops if SMTP_HOST unset)
+- `backend/src/services/email.service.ts` — all email logic + HTML templates
+- `backend/src/controllers/email.controller.ts`
+- `backend/src/routes/email.routes.ts`
+
+**Settings page already has an "Email (SMTP)" tab.** When you split `SettingsPage.tsx` for feat-006:
+- Keep the Email tab in `PlatformSettingsPage.tsx` (admin-only, correct home for SMTP config)
+- Do not remove the `handleSendEmail` function or the 3 manual trigger buttons
+
+### Socket Events — Complete List (backend/src/types/index.ts)
+
+```typescript
+SOCKET_EVENTS = {
+  NOTIFICATION_NEW, NOTIFICATION_CRITICAL,
+  PAY_ANOMALY, BUDGET_THRESHOLD, RSU_VESTING,
+  DASHBOARD_REFRESH,
+  EMPLOYEE_CREATED, EMPLOYEE_UPDATED,
+  EMPLOYEE_DATA_CHANGED,   // broad cache-bust after any employee write
+  SALARY_BAND_UPDATED,     // triggers after SalaryBand.update() — batch recalc done
+  IMPORT_PROGRESS, IMPORT_COMPLETE,
+  DATA_REFRESH_MODULES,
+}
+```
+
+### Band Order — Single Source of Truth
+
+The DB has exactly **6 bands**: `A1 → A2 → P1 → P2 → P3 → P4`
+Defined in `backend/src/types/index.ts` as `BAND_ORDER`.
+**Never hardcode band arrays** — import `BAND_ORDER` instead.
+
+### Dashboard Service — Safe to Extend Now
+
+`backend/src/services/dashboard.service.ts` is clean for feat-003. Bakul's work is done.
+When adding new methods for feat-003 charts, follow the existing `cached()` helper pattern:
+```typescript
+getMyNewChart: () => cached('dashboard:my-chart', async () => { /* Prisma query */ })
+```
+Cache keys must start with `dashboard:` so they get invalidated by `cacheDelPattern('dashboard:*')`.
+
+### App.tsx Route Mounting Order (feat-001 / feat-006)
+
+When adding new page routes in `frontend/src/App.tsx`, keep them lazy-loaded:
+```tsx
+const CompensationHubPage = lazy(() => import('./pages/CompensationHubPage'));
+```
+The route for `/settings` currently points to `SettingsPage`. When you split it (feat-006), change it to point to `PlatformSettingsPage` for `/settings/platform` and `UserSettingsPage` for `/settings/user`. Keep the old `/settings` route redirecting to one of them so existing links don't 404.
 
 ---
 
@@ -353,8 +431,8 @@ These files affect the entire system. Changes require explicit communication wit
 | `backend/tsconfig.json` | MEDIUM | Compiler settings — rootDir change can break the entire build output |
 | `frontend/vite.config.ts` | MEDIUM | Dev proxy + chunk config — proxy change = API calls fail in dev |
 | `frontend/.env` | MEDIUM | `VITE_*` vars are inlined at build time — wrong value bakes bad URL into bundle |
-| `backend/src/services/dashboard.service.ts` | HIGH | **Cross-dev clash**: feat-002 (Bakul) adds cache invalidation, feat-003 (Aryan) adds endpoints, feat-007 (Bakul) audits data. Bakul must finish before Aryan extends. |
-| `frontend/src/pages/SettingsPage.tsx` | HIGH | **Cross-dev clash**: feat-004 (Bakul) adds email config section, feat-006 (Aryan) splits the file into two pages. Bakul goes first — wrong order loses the email section. |
+| `backend/src/services/dashboard.service.ts` | HIGH | **Cross-dev clash**: Bakul's work (feat-002, feat-007) is done. Aryan extends with new endpoints for feat-003. Follow the `cached()` pattern, keys must start with `dashboard:`. |
+| `frontend/src/pages/SettingsPage.tsx` | HIGH | **Cross-dev clash**: Bakul added email config tab (feat-004) ✅. Aryan must migrate the Email tab into `PlatformSettingsPage` when splitting for feat-006 — do not lose it. |
 | `frontend/src/components/layout/Sidebar.tsx` | HIGH | Touched by feat-001, feat-005, feat-006 in strict sequence (all Aryan). Rewritten in feat-001, extended in feat-005, updated in feat-006. Never edit out of order — each builds on the last. |
 | `backend/src/services/employee.service.ts` | HIGH | Core data entity — all compensation calculations flow from here. feat-002 adds cache invalidation, feat-008 rewrites compa-ratio to use DB bands. Both Bakul, must be sequential. |
 | `backend/src/services/salaryBand.service.ts` | HIGH | Claimed by feat-002, feat-007, feat-008 in sequence (all Bakul). feat-008 rewrites band logic to use DB — do not add any hardcoded band references here. |

@@ -58,7 +58,7 @@
       "id": "feat-004",
       "title": "Auto Email Generation for Module Actions",
       "description": "Build a reusable email service (nodemailer with SMTP config from env) and implement auto-email triggers: (1) Low performer alert from Performance tab — manager receives email listing direct reports below rating threshold with suggested actions; (2) Pay anomaly emails — HR lead notified when employee salary drifts outside band; (3) RSU cliff reminder — employee + manager emailed 30 days before first vest. Create HTML email templates. Add email config section (SMTP host, port, sender) to Platform Settings. Add 'Send Email' trigger buttons in Performance and Pay Equity pages.",
-      "status": "pending",
+      "status": "done",
       "assigned_to": "bakul",
       "files_affected": [
         "backend/src/services/email.service.ts",
