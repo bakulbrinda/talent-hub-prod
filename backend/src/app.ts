@@ -21,6 +21,7 @@ import variablePayRoutes from './routes/variablePay.routes';
 import scenarioRoutes from './routes/scenarios.routes';
 import exportRoutes from './routes/export.routes';
 import importRoutes from './routes/import.routes';
+import emailRoutes from './routes/email.routes';
 
 const app = express();
 
@@ -99,6 +100,7 @@ app.use('/api/variable-pay', variablePayRoutes);
 app.use('/api/scenarios', scenarioRoutes);
 app.use('/api/export', exportRoutes);
 app.use('/api/import', importRoutes);
+app.use('/api/email', emailRoutes);
 
 // ─── 404 for unknown API routes ───────────────────────────────
 app.use('/api/*', (_req, res) => {

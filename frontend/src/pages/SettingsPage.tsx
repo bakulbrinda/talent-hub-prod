@@ -1,16 +1,35 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Settings, Database, Bell, Key, RefreshCw, CheckCircle, XCircle } from 'lucide-react';
+import { Settings, Database, Bell, Key, RefreshCw, CheckCircle, XCircle, Mail } from 'lucide-react';
+import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
 
-type Tab = 'general' | 'api' | 'data' | 'notifications';
+type Tab = 'general' | 'api' | 'data' | 'notifications' | 'email';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('general');
   const [testing, setTesting] = useState(false);
   const [apiStatus, setApiStatus] = useState<'unknown' | 'ok' | 'error'>('unknown');
   const [exportLoading, setExportLoading] = useState('');
+  const [emailSending, setEmailSending] = useState<string>('');
+
+  const handleSendEmail = async (endpoint: string, label: string) => {
+    setEmailSending(endpoint);
+    try {
+      const r = await api.post(`/email/${endpoint}`);
+      const d = r.data.data;
+      if (d.sent > 0) {
+        toast.success(`${label} sent`, { description: `${d.sent} email(s) dispatched` });
+      } else {
+        toast.info('No emails sent', { description: 'SMTP not configured or no matching records found' });
+      }
+    } catch {
+      toast.error(`Failed to send ${label}`);
+    } finally {
+      setEmailSending('');
+    }
+  };
 
   const { data: healthRaw } = useQuery({
     queryKey: ['health'],
@@ -59,6 +78,7 @@ export default function SettingsPage() {
     { key: 'api',           label: 'API Connections',  icon: Key       },
     { key: 'data',          label: 'Data Management',  icon: Database  },
     { key: 'notifications', label: 'Notifications',    icon: Bell      },
+    { key: 'email',         label: 'Email (SMTP)',      icon: Mail      },
   ];
 
   return (
@@ -275,6 +295,92 @@ export default function SettingsPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* EMAIL SMTP */}
+          {activeTab === 'email' && (
+            <div className="space-y-4">
+              {/* SMTP Config */}
+              <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">SMTP Configuration</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Configure outbound email. Set these values in <code className="bg-muted px-1 rounded">backend/.env</code> — they are not editable at runtime.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 gap-3">
+                  {[
+                    { label: 'SMTP Host',     envKey: 'SMTP_HOST',     placeholder: 'smtp.gmail.com' },
+                    { label: 'SMTP Port',     envKey: 'SMTP_PORT',     placeholder: '587' },
+                    { label: 'SMTP User',     envKey: 'SMTP_USER',     placeholder: 'alerts@yourcompany.com' },
+                    { label: 'SMTP Password', envKey: 'SMTP_PASS',     placeholder: '••••••••' },
+                    { label: 'HR Alert Email',envKey: 'HR_ALERT_EMAIL',placeholder: 'hr-lead@yourcompany.com' },
+                  ].map(f => (
+                    <div key={f.envKey}>
+                      <label className="text-xs font-medium text-muted-foreground">
+                        {f.label} <code className="bg-muted px-1 rounded ml-1">{f.envKey}</code>
+                      </label>
+                      <input
+                        type={f.envKey === 'SMTP_PASS' ? 'password' : 'text'}
+                        placeholder={f.placeholder}
+                        readOnly
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-muted/50 text-sm opacity-70 cursor-not-allowed"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                  These fields are read-only here. Edit <code>backend/.env</code> and restart the server to apply changes.
+                </p>
+              </div>
+
+              {/* Manual Email Triggers */}
+              <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+                <h3 className="text-sm font-semibold text-foreground">Manual Email Triggers</h3>
+                <div className="space-y-3">
+                  {[
+                    {
+                      endpoint: 'low-performer-alert',
+                      label: 'Low Performer Alerts',
+                      desc: 'Send emails to all managers with direct reports rated below 3.0',
+                      icon: '⚠️',
+                    },
+                    {
+                      endpoint: 'pay-anomaly-alert',
+                      label: 'Pay Anomaly Alert',
+                      desc: 'Send pay anomaly summary to HR_ALERT_EMAIL',
+                      icon: '💰',
+                    },
+                    {
+                      endpoint: 'rsu-reminders',
+                      label: 'RSU Cliff Reminders',
+                      desc: 'Email employees with RSU vesting events in the next 30 days',
+                      icon: '📈',
+                    },
+                  ].map(item => (
+                    <div key={item.endpoint} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{item.icon}</span>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{item.label}</p>
+                          <p className="text-xs text-muted-foreground">{item.desc}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleSendEmail(item.endpoint, item.label)}
+                        disabled={emailSending === item.endpoint}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors shrink-0"
+                      >
+                        {emailSending === item.endpoint
+                          ? <div className="w-3 h-3 border border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                          : <Mail className="w-3 h-3" />}
+                        {emailSending === item.endpoint ? 'Sending...' : 'Send'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}

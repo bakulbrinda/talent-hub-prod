@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Star, TrendingUp, AlertTriangle, Sparkles, RefreshCw, X, Loader2 } from 'lucide-react';
+import { Star, TrendingUp, AlertTriangle, Sparkles, RefreshCw, X, Loader2, Mail } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
 
@@ -50,8 +51,26 @@ function RatingStars({ rating }: { rating: number }) {
 export default function PerformancePage() {
   const [activeTab, setActiveTab] = useState<'matrix' | 'promotion' | 'gaps'>('matrix');
   const [showAI, setShowAI] = useState(false);
+  const [sendingAlert, setSendingAlert] = useState(false);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const handleSendLowPerformerAlert = async () => {
+    setSendingAlert(true);
+    try {
+      const r = await api.post('/email/low-performer-alert');
+      const { sent, managerCount } = r.data.data;
+      if (sent > 0) {
+        toast.success(`Alerts sent to ${sent} manager(s)`, { description: `${managerCount} manager(s) notified about low performers` });
+      } else {
+        toast.info('No alerts sent', { description: 'SMTP not configured or no managers with low performers found' });
+      }
+    } catch {
+      toast.error('Failed to send alerts');
+    } finally {
+      setSendingAlert(false);
+    }
+  };
 
   const { data: matrixRaw, isLoading: matrixLoading } = useQuery({
     queryKey: ['performance', 'matrix'],
@@ -347,6 +366,14 @@ export default function PerformancePage() {
                   <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
                   <h3 className="text-sm font-semibold text-foreground">Stars — High Performers, Below Market</h3>
                   <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs">{gaps.stars.length}</span>
+                  <button
+                    onClick={handleSendLowPerformerAlert}
+                    disabled={sendingAlert}
+                    className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+                  >
+                    {sendingAlert ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
+                    {sendingAlert ? 'Sending...' : 'Alert Managers'}
+                  </button>
                 </div>
                 {gaps.stars.length === 0 ? (
                   <p className="text-sm text-muted-foreground px-2">No employees in this category</p>
