@@ -75,10 +75,12 @@ Hackathon /
 │   ├── prisma/
 │   │   ├── schema.prisma       # 24 Prisma models — source of truth for DB
 │   │   ├── migrations/         # Versioned SQL migration files
-│   │   ├── seed.ts             # Demo data (71 employees, bands, scenarios, etc.)
+│   │   ├── seed.ts             # Demo data (200 employees via Zoho CSV format, bands, scenarios, etc.)
 │   │   └── seed-job-architecture.ts
 │   ├── scripts/
-│   │   └── create-admin.ts     # Admin user upsert utility
+│   │   ├── create-admin.ts            # Admin user upsert utility
+│   │   ├── seed-variable-pay.ts       # Seeds 3 commission plans + 97 achievements
+│   │   └── seed-benefits-utilization.ts # Seeds benefits + RSU grant enrollments for all 200 employees
 │   ├── .env                    # Secrets — NEVER commit
 │   ├── .env.example            # Template for .env
 │   ├── package.json
@@ -110,7 +112,6 @@ Hackathon /
 │   └── constants/index.ts      # ~237 lines — band configs, socket events, AI config
 │
 ├── CLAUDE.md                   # This file
-├── IMPLEMENTATION_PLAN.md      # Phase-by-phase roadmap
 ├── docker-compose.yml
 └── .gitignore
 ```
@@ -202,7 +203,7 @@ Backend: res.setHeader('Content-Type', 'text/event-stream') + res.flushHeaders()
 | `AuditLog` | Sensitive action audit trail |
 | `JobArea` | Top-level job classification (Engineering, Sales…) |
 | `JobFamily` | Mid-level (Software, Hardware…) |
-| `Band` | Compensation levels A1–P4 |
+| `Band` | Compensation levels A1–D2 (10 bands: A1, A2, P1, P2, P3, M1, M2, D0, D1, D2) |
 | `Grade` | Sub-levels within bands |
 | `JobCode` | Specific role codes (SWE-001…) |
 | `Skill` | Skill catalog |
@@ -213,10 +214,10 @@ Backend: res.setHeader('Content-Type', 'text/event-stream') + res.flushHeaders()
 | `PerformanceRating` | Annual cycle ratings |
 | `BenefitsCatalog` | Benefits offered |
 | `EmployeeBenefit` | Employee enrollment records |
-| `RsuGrant` | RSU grant with vesting schedule |
+| `RsuGrant` | RSU grant with vesting schedule (legacy — RSU UI is now the EQUITY tab in Benefits Management) |
 | `RsuVestingEvent` | Individual vesting milestone |
-| `CommissionPlan` | Variable pay plan templates |
-| `CommissionAchievement` | Actual commission earned |
+| `CommissionPlan` | Variable pay plan templates (backend only — Variable Pay page is now CSV-derived analytics) |
+| `CommissionAchievement` | Actual commission earned (backend only — not surfaced in UI) |
 | `Scenario` | What-if rule sets for salary modeling |
 | `Notification` | User-facing alerts |
 | `AiInsight` | Cached Claude API outputs |
@@ -347,10 +348,9 @@ Files: `lib/emailClient.ts`, `services/email.service.ts`, `controllers/email.con
 - Manual trigger: `POST /api/notifications/trigger-scan` (admin)
 
 ### AI Streaming Pattern
-- `POST /api/ai/report/stream` — 5-section leadership report via `anthropic.messages.stream()`
 - `POST /api/ai/chat/stream` — conversational AI with 7 DB tools + tool-use loop
 - `POST /api/ai/chat/suggest-scenarios` — goal → 3 DRAFT Scenario records created in DB
-- `POST /api/ai/chat/band-suggestions` — compa-ratio analysis → band adjustment suggestions
+- `POST /api/ai/chat/band-suggestions` — compa-ratio analysis → band adjustment suggestions (JSON response, NOT SSE)
 
 ### Socket Events — Complete List (backend/src/types/index.ts)
 ```typescript
@@ -367,9 +367,10 @@ SOCKET_EVENTS = {
 ```
 
 ### Band Order — Single Source of Truth
-The DB has exactly **6 bands**: `A1 → A2 → P1 → P2 → P3 → P4`
-Defined in `backend/src/types/index.ts` as `BAND_ORDER`.
+The DB has exactly **10 bands**: `A1 → A2 → P1 → P2 → P3 → M1 → M2 → D0 → D1 → D2`
+Defined in `backend/src/types/index.ts` as `BAND_ORDER` and in `shared/constants/index.ts`.
 **Never hardcode band arrays** — import `BAND_ORDER` instead.
+RSU grants are eligible from P1 and above; A1/A2 are not RSU-eligible.
 
 ### Dashboard Caching Pattern
 ```typescript
@@ -392,8 +393,23 @@ Cache keys must start with `dashboard:` so they get invalidated by `cacheDelPatt
 - `BenefitStatus`: ACTIVE, EXPIRED, CLAIMED
 - `EmploymentStatus`: ACTIVE, INACTIVE, ON_LEAVE, TERMINATED
 - `ScenarioStatus`: DRAFT, APPLIED, ARCHIVED
-- Employee fields: `designation` (not `title`), `gender` enum as above
+- `Criticality`: C1 (Critical+Irreplaceable), C2 (Critical), C3 (Important), C4 (Non-Critical+Replaceable)
+- Employee fields: `designation` (not `title`), `gender` enum as above, `criticality` (optional Criticality enum)
 - RsuVestingEvent: relation is `rsuGrant` (not `grant`), field is `unitsVesting` (not `units`)
+
+### Variable Pay Page — CSV-Derived Only
+The Variable Pay page (`/variable-pay`) reads **only** from `employee.variablePay` (a CSV field).
+It shows KPIs, by-department bars, by-band bars, and a top-15 earners table.
+There are no tabs, no manual input, no commission plan or achievement management in the UI.
+Commission-related Prisma models (CommissionPlan, CommissionAchievement) still exist in DB but are backend-only.
+
+### RSU — Now Under Benefits Management
+RSU data is surfaced as the "RSU Grants" tab inside **Benefits Management** (`/benefits`).
+It is driven by EQUITY-category `EmployeeBenefit` records:
+- `utilizationPercent` = vesting %
+- `utilizedValue` = vested ₹ amount
+Seeded via `scripts/seed-benefits-utilization.ts` (tenure-based vesting, band-based grant value).
+The `/rsu` route redirects to `/benefits`. RSU is listed under the Benefits nav group.
 
 ---
 
