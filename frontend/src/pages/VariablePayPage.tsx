@@ -82,8 +82,8 @@ export default function VariablePayPage() {
         achievedAmount: Number(calcForm.achievedAmount),
       });
       setCalcResult(result.data);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error?.message || 'Failed to calculate payout');
     } finally {
       setCalcLoading(false);
     }
@@ -105,9 +105,10 @@ export default function VariablePayPage() {
       setSavedPeriod(calcForm.period);
       queryClient.invalidateQueries({ queryKey: ['variable-pay', 'achievements'] });
       queryClient.invalidateQueries({ queryKey: ['variable-pay', 'analytics'] });
+      queryClient.removeQueries({ queryKey: ['variable-pay', 'ai-analysis'] });
       toast.success(`Achievement saved for ${calcResult.employeeName} — ${calcForm.period}`);
-    } catch (err) {
-      console.error(err);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error?.message || 'Failed to save achievement');
     } finally {
       setSaveLoading(false);
     }
@@ -309,14 +310,22 @@ export default function VariablePayPage() {
             <h3 className="text-sm font-semibold text-foreground mb-4">Calculate Payout</h3>
             <form onSubmit={handleCalculate} className="space-y-4">
               <div>
-                <label className="text-xs font-medium text-muted-foreground">Employee ID</label>
-                <input
-                  type="text"
-                  placeholder="Enter employee ID"
+                <label className="text-xs font-medium text-muted-foreground">Employee</label>
+                <select
                   value={calcForm.employeeId}
                   onChange={e => setCalcForm(p => ({ ...p, employeeId: e.target.value }))}
                   className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
+                >
+                  <option value="">Select an employee</option>
+                  {employees
+                    .slice()
+                    .sort((a: any, b: any) => `${a.firstName} ${a.lastName}`.localeCompare(`${b.firstName} ${b.lastName}`))
+                    .map((emp: any) => (
+                      <option key={emp.id} value={emp.id}>
+                        {emp.firstName} {emp.lastName} — {emp.department} · {emp.band}
+                      </option>
+                    ))}
+                </select>
               </div>
               <div>
                 <label className="text-xs font-medium text-muted-foreground">Commission Plan</label>
@@ -329,6 +338,16 @@ export default function VariablePayPage() {
                   {plans.map((p: any) => (
                     <option key={p.id} value={p.id}>{p.name}</option>
                   ))}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs font-medium text-muted-foreground">Period</label>
+                <select
+                  value={calcForm.period}
+                  onChange={e => setCalcForm(p => ({ ...p, period: e.target.value }))}
+                  className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                >
+                  {getRecentQuarters().map(q => <option key={q} value={q}>{q}</option>)}
                 </select>
               </div>
               <div>

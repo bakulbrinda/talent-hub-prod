@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { callClaude } from '../lib/claudeClient';
-import { cacheGet, cacheSet } from '../lib/redis';
+import { cacheGet, cacheSet, cacheDelPattern } from '../lib/redis';
 
 export const variablePayService = {
   getPlans: async () => {
@@ -108,21 +108,27 @@ export const variablePayService = {
     const existing = await prisma.commissionAchievement.findFirst({
       where: { employeeId: data.employeeId, planId: data.planId, period: data.period },
     });
-    if (existing) {
-      return prisma.commissionAchievement.update({
-        where: { id: existing.id },
-        data: {
-          achievedAmount: data.achievedAmount,
-          achievementPercent: data.achievementPercent,
-          payoutAmount: data.payoutAmount,
-          targetAmount: data.targetAmount,
-        },
-      });
-    }
-    return prisma.commissionAchievement.create({ data });
+    const record = existing
+      ? await prisma.commissionAchievement.update({
+          where: { id: existing.id },
+          data: {
+            achievedAmount: data.achievedAmount,
+            achievementPercent: data.achievementPercent,
+            payoutAmount: data.payoutAmount,
+            targetAmount: data.targetAmount,
+          },
+        })
+      : await prisma.commissionAchievement.create({ data });
+
+    // Bust analytics + AI analysis caches so stale data isn't served
+    await cacheDelPattern('variable-pay:*');
+    return record;
   },
 
   getAnalytics: async () => {
+    const cached = await cacheGet<any>('variable-pay:analytics');
+    if (cached) return cached;
+
     const achievements = await prisma.commissionAchievement.findMany({
       include: { employee: { select: { band: true } } },
     });
@@ -168,7 +174,7 @@ export const variablePayService = {
       {},
     );
 
-    return {
+    const result = {
       totalAchievements: achievements.length,
       avgAchievementPercent: Math.round(avgAchievement * 10) / 10,
       totalTargetAmount,
@@ -179,6 +185,8 @@ export const variablePayService = {
         avgAchievement: Math.round((v.total / v.count) * 10) / 10,
       })),
     };
+    await cacheSet('variable-pay:analytics', result, 300); // 5-min cache
+    return result;
   },
 
   analyzeWithAI: async (): Promise<string> => {
@@ -250,7 +258,7 @@ Provide:
 Format with clear markdown headers. Be specific with rupee amounts and percentages.`;
 
     try {
-      const result = await callClaude(prompt, { temperature: 0.4, maxTokens: 1200 });
+      const result = await callClaude(prompt, { temperature: 0.4, maxTokens: 2000 });
       await cacheSet('variable-pay:ai-analysis', result.content, 1800);
       return result.content;
     } catch {
