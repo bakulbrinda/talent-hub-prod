@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, BarChart3, Scale, Sparkles, Gift,
   TrendingUp, Award, Zap, FlaskConical, Bell, Settings,
-  ChevronDown, DollarSign, Layers, Building2, FileText,
+  ChevronDown, DollarSign, Layers, Building2,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useNotificationStore } from '../../store/notificationStore';
@@ -56,7 +56,6 @@ const NAV_GROUPS: NavGroup[] = [
       { path: '/salary-bands', label: 'Salary Bands', icon: BarChart3 },
       { path: '/pay-equity', label: 'Pay Equity', icon: Scale },
       { path: '/variable-pay', label: 'Variable Pay', icon: Zap },
-      { path: '/rsu', label: 'RSU Tracker', icon: Award },
       { path: '/scenarios', label: 'Scenarios', icon: FlaskConical },
     ],
   },
@@ -76,7 +75,7 @@ const NAV_GROUPS: NavGroup[] = [
     icon: Gift,
     items: [
       { path: '/benefits-hub', label: 'Hub Overview', icon: Building2 },
-      { path: '/benefits', label: 'Benefits Mgmt', icon: Gift },
+      { path: '/benefits', label: 'Benefits & RSU', icon: Gift },
     ],
   },
   {

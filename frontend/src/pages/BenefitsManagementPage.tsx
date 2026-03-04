@@ -1,6 +1,6 @@
 import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Gift, BarChart3, Users, CheckCircle, XCircle, TrendingUp, Upload, Sparkles, RefreshCw, X, FileSpreadsheet, Loader2 } from 'lucide-react';
+import { Gift, BarChart3, Users, CheckCircle, XCircle, TrendingUp, Upload, Sparkles, RefreshCw, X, FileSpreadsheet, Loader2, Award } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
@@ -37,7 +37,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 };
 
 export default function BenefitsManagementPage() {
-  const [activeTab, setActiveTab] = useState<'catalog' | 'utilization' | 'enrollments'>('catalog');
+  const [activeTab, setActiveTab] = useState<'catalog' | 'utilization' | 'enrollments' | 'rsu'>('catalog');
   const [showImport, setShowImport] = useState(false);
   const [showAI, setShowAI] = useState(false);
   const [dragOver, setDragOver] = useState(false);
@@ -101,7 +101,15 @@ export default function BenefitsManagementPage() {
     { key: 'catalog', label: 'Benefits Catalog', icon: Gift },
     { key: 'utilization', label: 'Utilization Analytics', icon: BarChart3 },
     { key: 'enrollments', label: 'Enrollment Management', icon: Users },
+    { key: 'rsu', label: 'RSU Grants', icon: Award },
   ] as const;
+
+  // RSU Grants = EQUITY category enrollments from the same benefits CSV upload
+  const rsuEnrollments = enrollments.filter((e: any) => e.benefit?.category === 'EQUITY');
+  const totalVestedValue = rsuEnrollments.reduce((s: number, e: any) => s + Number(e.utilizedValue || 0), 0);
+  const avgVestingPct = rsuEnrollments.length > 0
+    ? rsuEnrollments.reduce((s: number, e: any) => s + Number(e.utilizationPercent || 0), 0) / rsuEnrollments.length
+    : 0;
 
   return (
     <div className="space-y-5">
@@ -418,6 +426,101 @@ export default function BenefitsManagementPage() {
                   )}
                 </div>
               ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* RSU Grants Tab */}
+      {activeTab === 'rsu' && (
+        <div className="space-y-5">
+          {/* RSU KPIs */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              { label: 'RSU Grant Records', value: rsuEnrollments.length, icon: '📈', color: 'text-purple-600' },
+              { label: 'Total Vested Value', value: `₹${(totalVestedValue / 100000).toFixed(1)}L`, icon: '💰', color: 'text-green-600' },
+              { label: 'Avg Vesting %', value: `${avgVestingPct.toFixed(1)}%`, icon: '⏳', color: 'text-blue-600' },
+              { label: 'Equity Benefits', value: [...new Set(rsuEnrollments.map((e: any) => e.benefit?.name))].length, icon: '🏦', color: 'text-orange-600' },
+            ].map(kpi => (
+              <div key={kpi.label} className="rounded-xl border border-border bg-card p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="text-xl">{kpi.icon}</span>
+                  <span className="text-xs text-muted-foreground">{kpi.label}</span>
+                </div>
+                <p className={cn('text-2xl font-bold', kpi.color)}>{kpi.value}</p>
+              </div>
+            ))}
+          </div>
+
+          {enrollLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <div className="w-8 h-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            </div>
+          ) : rsuEnrollments.length === 0 ? (
+            <div className="rounded-xl border border-border bg-card py-14 text-center space-y-2">
+              <Award className="w-10 h-10 text-muted-foreground/30 mx-auto" />
+              <p className="text-sm font-medium text-foreground">No RSU grant data uploaded yet</p>
+              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                Upload a benefits utilization CSV that includes EQUITY-category benefits (e.g. "RSU Grant — 2024").
+                Use the <button className="underline text-primary" onClick={() => { setActiveTab('catalog'); }}>Benefits Catalog</button> to add equity benefits, then upload utilization data.
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-border bg-muted/50">
+                    {['Employee', 'Department', 'Band', 'Grant / Benefit', 'Enrolled On', 'Vesting %', 'Vested Value', 'Status'].map(h => (
+                      <th key={h} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {rsuEnrollments.map((e: any) => (
+                    <tr key={e.id} className="hover:bg-muted/30 transition-colors">
+                      <td className="px-4 py-3">
+                        <p className="font-medium text-foreground">{e.employee?.firstName} {e.employee?.lastName}</p>
+                        <p className="text-xs text-muted-foreground">{e.employee?.designation}</p>
+                      </td>
+                      <td className="px-4 py-3 text-muted-foreground">{e.employee?.department}</td>
+                      <td className="px-4 py-3">
+                        <span className="px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 text-xs">{e.employee?.band}</span>
+                      </td>
+                      <td className="px-4 py-3 text-foreground">{e.benefit?.name}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {e.enrolledAt ? new Date(e.enrolledAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden w-16">
+                            <div
+                              className="h-full rounded-full bg-purple-500"
+                              style={{ width: `${Math.min(100, Number(e.utilizationPercent || 0))}%` }}
+                            />
+                          </div>
+                          <span className={cn(
+                            'text-xs font-medium',
+                            Number(e.utilizationPercent) >= 75 ? 'text-green-600' : Number(e.utilizationPercent) >= 40 ? 'text-yellow-600' : 'text-muted-foreground'
+                          )}>
+                            {Number(e.utilizationPercent || 0).toFixed(0)}%
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 font-medium text-foreground">
+                        {Number(e.utilizedValue) > 0 ? `₹${(Number(e.utilizedValue) / 100000).toFixed(1)}L` : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={cn(
+                          'px-2 py-0.5 rounded-full text-xs',
+                          e.status === 'ACTIVE' ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'
+                        )}>
+                          {e.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>

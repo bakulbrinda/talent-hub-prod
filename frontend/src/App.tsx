@@ -14,7 +14,6 @@ const EmployeeProfilePage = lazy(() => import('./pages/EmployeeProfilePage'));
 const SalaryBandDesignerPage = lazy(() => import('./pages/SalaryBandDesignerPage'));
 const PayEquityPage = lazy(() => import('./pages/PayEquityPage'));
 const BenefitsManagementPage = lazy(() => import('./pages/BenefitsManagementPage'));
-const RSUTrackerPage = lazy(() => import('./pages/RSUTrackerPage'));
 const PerformancePage = lazy(() => import('./pages/PerformancePage'));
 const VariablePayPage = lazy(() => import('./pages/VariablePayPage'));
 const ScenarioModelerPage = lazy(() => import('./pages/ScenarioModelerPage'));
@@ -59,7 +58,7 @@ function AppRoutes() {
           <Route path="salary-bands" element={<SalaryBandDesignerPage />} />
           <Route path="pay-equity" element={<PayEquityPage />} />
           <Route path="benefits" element={<BenefitsManagementPage />} />
-          <Route path="rsu" element={<RSUTrackerPage />} />
+          <Route path="rsu" element={<Navigate to="/benefits" replace />} />
           <Route path="performance" element={<PerformancePage />} />
           <Route path="variable-pay" element={<VariablePayPage />} />
           <Route path="scenarios" element={<ScenarioModelerPage />} />
