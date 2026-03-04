@@ -226,7 +226,19 @@ ${bandStatsSummary}
 
 Analyze whether the current salary band midpoints are well-calibrated to actual employee pay, and provide adjustment recommendations.
 
-Return ONLY a valid JSON array (no prose, no markdown):
+Return ONLY a valid JSON array with no prose, no markdown fences, no explanation outside the array.
+Each object must have exactly these fields:
+- "band": string — the band code (e.g. "P3")
+- "currentMidLakhs": number — current mid salary in lakhs
+- "suggestedMidLakhs": number — your recommended mid in lakhs
+- "suggestedMinLakhs": number — your recommended min in lakhs
+- "suggestedMaxLakhs": number — your recommended max in lakhs
+- "direction": string — must be exactly one of: "increase", "decrease", "maintain"
+- "reasoning": string — 2-sentence explanation
+- "impactEmployees": number — count of employees affected
+- "urgency": string — must be exactly one of: "high", "medium", "low"
+
+Example of correct output format (use real values, not these):
 [
   {
     "band": "P3",
@@ -234,26 +246,32 @@ Return ONLY a valid JSON array (no prose, no markdown):
     "suggestedMidLakhs": 20.0,
     "suggestedMinLakhs": 15.0,
     "suggestedMaxLakhs": 25.0,
-    "direction": "increase" | "decrease" | "maintain",
-    "reasoning": "2-sentence explanation of why this adjustment is recommended",
-    "impactEmployees": <number of employees affected>,
-    "urgency": "high" | "medium" | "low"
+    "direction": "increase",
+    "reasoning": "The average compa-ratio of 112% indicates employees are paid above mid. Raising the midpoint will better reflect actual market positioning.",
+    "impactEmployees": 32,
+    "urgency": "medium"
   }
 ]
 
-Only suggest changes where the data clearly warrants it. If a band is well-calibrated, use direction "maintain" with reasoning.`;
+Only suggest changes where the data clearly warrants it. If a band is well-calibrated, use direction "maintain".`;
 
     const response = await callClaude(prompt, { temperature: 0.2, maxTokens: 1200 });
 
     let suggestions: any[];
     try {
-      const raw = response.content
+      // Strip markdown fences if present
+      let raw = response.content
         .replace(/```json\s*/gi, '')
         .replace(/```\s*/gi, '')
         .trim();
+      // Extract the JSON array robustly — handles any prose Claude may add before/after
+      const match = raw.match(/\[[\s\S]*\]/);
+      if (match) raw = match[0];
       suggestions = JSON.parse(raw);
       if (!Array.isArray(suggestions)) throw new Error('Not an array');
-    } catch {
+    } catch (parseErr: any) {
+      logger.error('[AI Band Suggestions] Parse error:', parseErr.message);
+      logger.error('[AI Band Suggestions] Raw response:', response.content?.slice(0, 500));
       return res.status(500).json({ error: { code: 'PARSE_ERROR', message: 'AI response could not be parsed' } });
     }
 
