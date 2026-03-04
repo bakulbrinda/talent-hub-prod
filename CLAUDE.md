@@ -37,6 +37,7 @@
 | Email | nodemailer | ^6.x |
 | Logging | winston | ^3.15.0 |
 | Validation | zod | ^3.23.8 |
+| Security | helmet | — |
 
 ### Frontend
 | Layer | Technology | Version |
@@ -65,14 +66,14 @@ Hackathon /
 │   ├── src/
 │   │   ├── index.ts            # Server bootstrap, HTTP + Socket.io init
 │   │   ├── app.ts              # Express app, middleware, route mounting
-│   │   ├── controllers/        # Request handlers (thin layer, 15 files)
-│   │   ├── services/           # Business logic + DB queries (15 files)
-│   │   ├── routes/             # Express Router definitions (16 files)
-│   │   ├── middleware/         # authenticate, errorHandler, requestLogger
+│   │   ├── controllers/        # Request handlers (thin layer)
+│   │   ├── services/           # Business logic + DB queries
+│   │   ├── routes/             # Express Router definitions
+│   │   ├── middleware/         # authenticate, requireRole, errorHandler, requestLogger
 │   │   ├── lib/                # Singletons: prisma, redis, socket, logger, claudeClient
 │   │   └── types/              # Backend-specific TypeScript types
 │   ├── prisma/
-│   │   ├── schema.prisma       # 22 Prisma models — source of truth for DB
+│   │   ├── schema.prisma       # 24 Prisma models — source of truth for DB
 │   │   ├── migrations/         # Versioned SQL migration files
 │   │   ├── seed.ts             # Demo data (71 employees, bands, scenarios, etc.)
 │   │   └── seed-job-architecture.ts
@@ -88,13 +89,14 @@ Hackathon /
 │   ├── src/
 │   │   ├── main.tsx            # React root, React Query provider, Sonner
 │   │   ├── App.tsx             # Router, lazy-loaded pages, Suspense
-│   │   ├── pages/              # 15 full-page components (lazy-loaded)
+│   │   ├── pages/              # Full-page components (lazy-loaded)
 │   │   ├── components/
 │   │   │   ├── layout/         # AppShell, Sidebar, TopBar, ProtectedRoute
 │   │   │   ├── employees/      # AddEmployeeModal, ImportEmployeesModal
-│   │   │   └── ThemeProvider.tsx
+│   │   │   ├── ChatPanel.tsx   # Floating AI chat panel (all pages)
+│   │   │   └── ScenarioSuggester.tsx
 │   │   ├── hooks/              # useAuth, useSocket
-│   │   ├── services/           # Axios API call wrappers (3 files)
+│   │   ├── services/           # Axios API call wrappers
 │   │   ├── store/              # Zustand stores: authStore, notificationStore
 │   │   └── lib/                # api.ts, queryClient.ts, socket.ts, utils.ts
 │   ├── .env                    # VITE_APP_NAME only — no hardcoded URLs
@@ -106,12 +108,6 @@ Hackathon /
 ├── shared/                     # Shared TypeScript types + constants
 │   ├── types/index.ts          # ~650 lines — ALL API types, enums, interfaces
 │   └── constants/index.ts      # ~237 lines — band configs, socket events, AI config
-│
-├── collab/                     # Developer coordination layer (see collab/README.md)
-│   ├── features.json           # Feature registry
-│   ├── file-ownership.json     # File → owner mapping
-│   ├── clash-rules.md          # High-risk shared files
-│   └── README.md
 │
 ├── CLAUDE.md                   # This file
 ├── IMPLEMENTATION_PLAN.md      # Phase-by-phase roadmap
@@ -127,6 +123,7 @@ Hackathon /
 ```
 Browser → Axios (api.ts, Bearer token injected) → Express
   → authenticate middleware (JWT verify → req.user)
+  → requireRole middleware (RBAC check)
   → Route handler
   → Controller (thin, delegates to service)
   → Service (Prisma query + optional Redis cache)
@@ -156,6 +153,13 @@ Axios interceptor catches 401 → silent refresh → retry original request
 ```
 Page mounts → useQuery(queryKeys.xxx) → api.get('/xxx') → cache
 Socket event arrives → invalidateQueries → automatic re-fetch → component updates
+```
+
+### SSE Streaming (AI endpoints)
+```
+Frontend: fetch() POST + ReadableStream + manual \n\n buffer split (NOT EventSource — can't set headers)
+Backend: res.setHeader('Content-Type', 'text/event-stream') + res.flushHeaders()
+         → write SSE events → keep-alive comment every 20s → res.end() on done
 ```
 
 ---
@@ -188,12 +192,14 @@ Socket event arrives → invalidateQueries → automatic re-fetch → component 
 
 ---
 
-## Prisma Models (22 total)
+## Prisma Models (24 total)
 
 | Model | Purpose |
 |---|---|
-| `User` | Admin/viewer accounts with JWT |
+| `User` | Platform users (ADMIN / HR_MANAGER / VIEWER) |
 | `RefreshToken` | Token rotation management |
+| `UserInvite` | Token-based invite system (7-day expiry) |
+| `AuditLog` | Sensitive action audit trail |
 | `JobArea` | Top-level job classification (Engineering, Sales…) |
 | `JobFamily` | Mid-level (Software, Hardware…) |
 | `Band` | Compensation levels A1–P4 |
@@ -229,7 +235,7 @@ ANTHROPIC_API_KEY # sk-ant-api03-...
 PORT              # 3001
 FRONTEND_URL      # Empty string in tunnel/dev mode = allow all CORS origins
 NODE_ENV          # development | production
-# Email (feat-004) — all optional; app runs fine without them
+# Email — all optional; app runs fine without them
 SMTP_HOST         # e.g. smtp.gmail.com
 SMTP_PORT         # 587
 SMTP_USER         # sender email address
@@ -273,87 +279,80 @@ cloudflared tunnel --url http://localhost:3001 >> /tmp/cloudflared.log 2>&1 &
 
 ---
 
-## Planned Features
+## Completed Features
 
-> Full registry with file impact and clash analysis is in `collab/features.json`.
-> Clash rules are documented in `collab/clash-rules.md`.
+All features are implemented and working. This is a single-developer project.
 
-| ID | Title | Assigned | Risk | Status |
-|---|---|---|---|---|
-| feat-001 | Platform Navigation Restructuring — 3-Module Hub | Bakul | HIGH | done ✅ |
-| feat-002 | Real-Time Data Flow Accuracy Across All Modules | Bakul | HIGH | done ✅ |
-| feat-003 | Enhanced Dashboard — 4 Key Graphs + Action Panel | Bakul | MEDIUM | done ✅ |
-| feat-004 | Auto Email Generation for Module Actions | Bakul | MEDIUM | done ✅ |
-| feat-005 | Merged Module Navigation — Collapsible Grouped Sidebar | Bakul | HIGH | done ✅ |
-| feat-006 | Dual Settings — Platform Settings + User Settings | Bakul | HIGH | done ✅ |
-| feat-007 | Real-Time Data Only — Purge All Placeholders | Bakul | MEDIUM | done ✅ |
-| feat-008 | Real-Time Calculation Logic — DB-Driven Salary Band Compliance | Bakul | HIGH | done ✅ |
-
-### Execution Status
-
-**Bakul — ALL DONE ✅**
-- feat-002 ✅ cache invalidation + socket events
-- feat-007 ✅ purged wrong bandOrder arrays, unified SOCKET_EVENTS constants
-- feat-008 ✅ DB-driven compa-ratio + batch recalc on SalaryBand update
-- feat-004 ✅ email service (nodemailer), 3 triggers, SMTP config in Settings
-
-**Aryan — START NOW**
-Order: `feat-001` → `feat-005` → `feat-003` → `feat-006`
-- feat-001: create CompensationHubPage + BenefitsHubPage, restructure App.tsx routes
-- feat-005: rewrite Sidebar.tsx into collapsible grouped nav (do in same PR as feat-001)
-- feat-003: extend dashboard.service.ts with 4 new endpoints + DashboardPage charts
-- feat-006: split SettingsPage.tsx into PlatformSettingsPage + UserSettingsPage (do LAST)
-
-### Cross-Dev Handoff Points — COMPLETED
-
-| File | What Bakul did | What Aryan must do next |
+| Phase | Feature | Status |
 |---|---|---|
-| `backend/src/services/dashboard.service.ts` | ✅ Cache invalidation + bandOrder fix (feat-002, feat-007) | Add new chart endpoints (feat-003) |
-| `frontend/src/pages/SettingsPage.tsx` | ✅ Email SMTP tab + 3 trigger buttons (feat-004) | Split into PlatformSettingsPage + UserSettingsPage (feat-006) — preserve the Email tab in PlatformSettingsPage |
+| feat-001 | Platform Navigation Restructuring — 3-Module Hub | ✅ done |
+| feat-002 | Real-Time Data Flow Accuracy Across All Modules | ✅ done |
+| feat-003 | Enhanced Dashboard — 4 Key Graphs + Action Panel | ✅ done |
+| feat-004 | Auto Email Generation for Module Actions | ✅ done |
+| feat-005 | Merged Module Navigation — Collapsible Grouped Sidebar | ✅ done |
+| feat-006 | Dual Settings — Platform Settings + User Settings | ✅ done |
+| feat-007 | Real-Time Data Only — Purge All Placeholders | ✅ done |
+| feat-008 | Real-Time Calculation Logic — DB-Driven Salary Band Compliance | ✅ done |
+| Phase 3 | AI Chat — SSE streaming with 7 live DB tools + tool-use loop | ✅ done |
+| Phase 4 | Proactive AI Anomaly Detection — hourly scan + Socket.io alerts | ✅ done |
+| Phase 5 | Leadership Report + Scenario Suggester + Band Suggestions | ✅ done |
+| Phase 6 | Multi-User RBAC — invite system, audit log, requireRole middleware | ✅ done |
 
 ---
 
 ## Currently Working On
 
-> Update this section before starting any feature. Clear it when done.
-> Full queue is in the Planned Features table above — pick next from your assigned sequence.
+> Update this section before starting any new work. Clear it when done.
 
-### Dev A — Bakul
 ```
-Feature  : ALL FEATURES COMPLETE ✅ (feat-001 through feat-008, all 8 features done)
+Feature  : —
 Files    : —
-Branch   : main
 Started  : —
 ```
 
 ---
 
-## Aryan's Reference — What Bakul Already Built
+## Key Technical Facts
 
-> Read this before starting any feature so you don't duplicate work or break existing flows.
+### Route Mounting Order in app.ts (IMPORTANT)
+`app.use('/api/users', usersRoutes)` **must come before** `app.use('/api', jobArchitectureRoutes)`.
+Reason: `jobArchitecture.routes.ts` applies `router.use(authenticate)` globally — it would block
+the public invite endpoints (`GET /api/users/invite/:token`, `POST /api/users/accept-invite`)
+if mounted first. Never change this ordering without understanding the implications.
 
-### Email Infrastructure (feat-004) — Already Live
+### RBAC — requireRole Middleware
+```typescript
+// backend/src/middleware/requireRole.ts
+requireRole('ADMIN')                  // ADMIN only
+requireRole('ADMIN', 'HR_MANAGER')   // both roles allowed
+```
+Applied to: scenario apply (ADMIN), scenario run/delete (ADMIN+HR), import employees (ADMIN+HR).
 
-New routes at `/api/email` (all require `authenticate` middleware):
+### User Roles
+- `ADMIN` — full access, can invite users, change roles, apply scenarios
+- `HR_MANAGER` — can run scenarios, import employees, view all data
+- `VIEWER` — read-only access
 
-| Method | Endpoint | What it does |
-|---|---|---|
-| POST | `/api/email/low-performer-alert` | Sends alerts to managers with direct reports rated < 3.0 |
-| POST | `/api/email/pay-anomaly-alert` | Sends pay outlier summary to `HR_ALERT_EMAIL` |
-| POST | `/api/email/rsu-reminders` | Emails employees with RSU vesting in next 30 days |
+### Email Infrastructure
+Routes at `/api/email` (require `authenticate`):
+- `POST /api/email/low-performer-alert` — alerts to managers with reports rated < 3.0
+- `POST /api/email/pay-anomaly-alert` — pay outlier summary to `HR_ALERT_EMAIL`
+- `POST /api/email/rsu-reminders` — emails employees with RSU vesting in 30 days
+Files: `lib/emailClient.ts`, `services/email.service.ts`, `controllers/email.controller.ts`, `routes/email.routes.ts`
 
-New files — **do not duplicate**:
-- `backend/src/lib/emailClient.ts` — nodemailer transporter (gracefully no-ops if SMTP_HOST unset)
-- `backend/src/services/email.service.ts` — all email logic + HTML templates
-- `backend/src/controllers/email.controller.ts`
-- `backend/src/routes/email.routes.ts`
+### AI Proactive Scan (Phase 4)
+- Redis mutex key: `ai_scan:running` (10-min TTL) prevents concurrent runs
+- 24hr deduplication: same notification title won't repeat within 24 hours
+- Schedule: 2-min startup delay (Neon DB wake), then every 1hr
+- Manual trigger: `POST /api/notifications/trigger-scan` (admin)
 
-**Settings page already has an "Email (SMTP)" tab.** When you split `SettingsPage.tsx` for feat-006:
-- Keep the Email tab in `PlatformSettingsPage.tsx` (admin-only, correct home for SMTP config)
-- Do not remove the `handleSendEmail` function or the 3 manual trigger buttons
+### AI Streaming Pattern
+- `POST /api/ai/report/stream` — 5-section leadership report via `anthropic.messages.stream()`
+- `POST /api/ai/chat/stream` — conversational AI with 7 DB tools + tool-use loop
+- `POST /api/ai/chat/suggest-scenarios` — goal → 3 DRAFT Scenario records created in DB
+- `POST /api/ai/chat/band-suggestions` — compa-ratio analysis → band adjustment suggestions
 
 ### Socket Events — Complete List (backend/src/types/index.ts)
-
 ```typescript
 SOCKET_EVENTS = {
   NOTIFICATION_NEW, NOTIFICATION_CRITICAL,
@@ -368,33 +367,39 @@ SOCKET_EVENTS = {
 ```
 
 ### Band Order — Single Source of Truth
-
 The DB has exactly **6 bands**: `A1 → A2 → P1 → P2 → P3 → P4`
 Defined in `backend/src/types/index.ts` as `BAND_ORDER`.
 **Never hardcode band arrays** — import `BAND_ORDER` instead.
 
-### Dashboard Service — Safe to Extend Now
-
-`backend/src/services/dashboard.service.ts` is clean for feat-003. Bakul's work is done.
-When adding new methods for feat-003 charts, follow the existing `cached()` helper pattern:
+### Dashboard Caching Pattern
 ```typescript
 getMyNewChart: () => cached('dashboard:my-chart', async () => { /* Prisma query */ })
 ```
 Cache keys must start with `dashboard:` so they get invalidated by `cacheDelPattern('dashboard:*')`.
 
-### App.tsx Route Mounting Order (feat-001 / feat-006)
+### Frontend — Key Facts
+- `getInitials(firstName, lastName)` — two separate args
+- `queryKeys.employees.all(filters)` (not `.list`)
+- `formatRelativeTime(date)` — date formatter in utils.ts
+- Notification store: `setUnreadCount(n)` (not `resetCount`)
+- Auth token: `sessionStorage.getItem('accessToken')`
+- All pages lazy-loaded in `App.tsx` via `lazy(() => import(...))`
+- Sidebar NAV_GROUPS: core, compensation, people, benefits, settings
 
-When adding new page routes in `frontend/src/App.tsx`, keep them lazy-loaded:
-```tsx
-const CompensationHubPage = lazy(() => import('./pages/CompensationHubPage'));
-```
-The route for `/settings` currently points to `SettingsPage`. When you split it (feat-006), change it to point to `PlatformSettingsPage` for `/settings/platform` and `UserSettingsPage` for `/settings/user`. Keep the old `/settings` route redirecting to one of them so existing links don't 404.
+### Prisma Schema — Key Enums
+- `UserRole`: ADMIN, HR_MANAGER, VIEWER
+- `Gender`: MALE, FEMALE, NON_BINARY, PREFER_NOT_TO_SAY
+- `BenefitStatus`: ACTIVE, EXPIRED, CLAIMED
+- `EmploymentStatus`: ACTIVE, INACTIVE, ON_LEAVE, TERMINATED
+- `ScenarioStatus`: DRAFT, APPLIED, ARCHIVED
+- Employee fields: `designation` (not `title`), `gender` enum as above
+- RsuVestingEvent: relation is `rsuGrant` (not `grant`), field is `unitsVesting` (not `units`)
 
 ---
 
-## Do Not Touch Without Coordination
+## Do Not Touch Without Care
 
-These files affect the entire system. Changes require explicit communication with your co-developer **before** editing.
+These files affect the entire system. Always read before editing.
 
 | File / Path | Risk | Reason |
 |---|---|---|
@@ -403,26 +408,21 @@ These files affect the entire system. Changes require explicit communication wit
 | `backend/prisma/migrations/` | CRITICAL | Version-controlled SQL — never edit manually |
 | `shared/types/index.ts` | HIGH | Used by 40+ files — a type change can cascade across the entire codebase |
 | `shared/constants/index.ts` | HIGH | Band configs, socket event names — changes affect backend + frontend simultaneously |
-| `backend/src/app.ts` | HIGH | Route mounting, CORS, middleware stack — easy to break all endpoints |
+| `backend/src/app.ts` | HIGH | Route mounting order matters — see note above about usersRoutes ordering |
 | `backend/src/index.ts` | HIGH | Server bootstrap — touches DB, Redis, Socket.io init |
-| `backend/src/lib/prisma.ts` | HIGH | Prisma singleton — used by all 15 services |
+| `backend/src/lib/prisma.ts` | HIGH | Prisma singleton — used by all services |
 | `backend/src/lib/redis.ts` | HIGH | Redis singleton + cache helpers — used by most services |
 | `backend/src/lib/socket.ts` | HIGH | Socket.io instance + all emit helpers — real-time events |
 | `backend/src/middleware/authenticate.ts` | HIGH | Auth gate — changes affect every protected endpoint |
+| `backend/src/routes/jobArchitecture.routes.ts` | HIGH | Has global `router.use(authenticate)` — any path changes affect all `/api/*` routing |
 | `frontend/src/App.tsx` | HIGH | Router + all lazy imports — breaking import crashes entire frontend |
 | `frontend/src/main.tsx` | HIGH | React root, providers — wrong change = blank screen |
 | `frontend/src/lib/api.ts` | HIGH | Axios instance with token logic — affects all API calls |
 | `frontend/src/store/authStore.ts` | MEDIUM | Auth state persistence — shared by all pages |
-| `backend/package.json` | MEDIUM | Dependency changes require `npm install` on both devs' machines |
+| `backend/package.json` | MEDIUM | Dependency changes require `npm install` |
 | `frontend/package.json` | MEDIUM | Same as above |
-| `backend/package-lock.json` | MEDIUM | Lock file — never manually edit, always commit after `npm install` |
-| `frontend/package-lock.json` | MEDIUM | Same as above |
 | `backend/tsconfig.json` | MEDIUM | Compiler settings — rootDir change can break the entire build output |
 | `frontend/vite.config.ts` | MEDIUM | Dev proxy + chunk config — proxy change = API calls fail in dev |
 | `frontend/.env` | MEDIUM | `VITE_*` vars are inlined at build time — wrong value bakes bad URL into bundle |
-| `backend/src/services/dashboard.service.ts` | HIGH | **Cross-dev clash**: Bakul's work (feat-002, feat-007) is done. Aryan extends with new endpoints for feat-003. Follow the `cached()` pattern, keys must start with `dashboard:`. |
-| `frontend/src/pages/SettingsPage.tsx` | HIGH | **Cross-dev clash**: Bakul added email config tab (feat-004) ✅. Aryan must migrate the Email tab into `PlatformSettingsPage` when splitting for feat-006 — do not lose it. |
-| `frontend/src/components/layout/Sidebar.tsx` | HIGH | Touched by feat-001, feat-005, feat-006 in strict sequence (all Aryan). Rewritten in feat-001, extended in feat-005, updated in feat-006. Never edit out of order — each builds on the last. |
-| `backend/src/services/employee.service.ts` | HIGH | Core data entity — all compensation calculations flow from here. feat-002 adds cache invalidation, feat-008 rewrites compa-ratio to use DB bands. Both Bakul, must be sequential. |
-| `backend/src/services/salaryBand.service.ts` | HIGH | Claimed by feat-002, feat-007, feat-008 in sequence (all Bakul). feat-008 rewrites band logic to use DB — do not add any hardcoded band references here. |
-| `backend/.env.example` | MEDIUM | Must be updated whenever a new required env var is added. feat-004 (email) adds `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS` — update this file in the same commit. |
+| `backend/src/services/employee.service.ts` | HIGH | Core data entity — all compensation calculations flow from here |
+| `backend/src/services/salaryBand.service.ts` | HIGH | Band logic uses DB only — never add hardcoded band references |
