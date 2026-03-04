@@ -50,7 +50,7 @@ export interface OrgSnapshot {
   }>;
 }
 
-export async function gatherOrgSnapshot(): Promise<OrgSnapshot> {
+async function fetchSnapshot(): Promise<OrgSnapshot> {
   const thirtyDaysAhead = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
   const ninetyDaysAgo   = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
   const now             = new Date();
@@ -188,4 +188,33 @@ export async function gatherOrgSnapshot(): Promise<OrgSnapshot> {
     rsuCliff,
     benefits,
   };
+}
+
+/**
+ * Public entry point — wraps fetchSnapshot with a Neon wake-up ping + one
+ * automatic retry. Neon pauses idle connections after ~5 min; the first query
+ * after a pause throws "Server has closed the connection". The ping warms the
+ * connection back up so the heavy parallel Promise.all succeeds.
+ */
+export async function gatherOrgSnapshot(): Promise<OrgSnapshot> {
+  // Ping the DB — if the connection was idle/closed this forces a reconnect.
+  // We swallow errors here intentionally; Prisma will reconnect for the real queries.
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+  } catch {
+    // Give Neon a moment to fully wake before hitting it with 7 parallel queries.
+    await new Promise(r => setTimeout(r, 1500));
+  }
+
+  try {
+    return await fetchSnapshot();
+  } catch (err: any) {
+    // One automatic retry — covers the edge case where the ping succeeded on a
+    // pooled connection but the subsequent queries still got a stale one.
+    if (err?.message?.includes('closed') || err?.message?.includes('connect') || err?.code === 'P1001') {
+      await new Promise(r => setTimeout(r, 2000));
+      return fetchSnapshot();
+    }
+    throw err;
+  }
 }
