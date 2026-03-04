@@ -35,6 +35,12 @@ export const employeeController = {
       res.json({ data: employee });
     } catch (e) { next(e); }
   },
+  delete: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await employeeService.delete(req.params.id);
+      res.json({ data: { success: true } });
+    } catch (e) { next(e); }
+  },
   getAnalytics: async (_req: Request, res: Response, next: NextFunction) => {
     try { res.json({ data: await employeeService.getAnalytics() }); } catch (e) { next(e); }
   },

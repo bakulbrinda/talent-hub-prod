@@ -98,6 +98,12 @@ export const employeeService = {
     return updated;
   },
 
+  delete: async (id: string) => {
+    await prisma.employee.delete({ where: { id } });
+    await invalidateEmployeeDerivedCaches();
+    emitDashboardRefresh();
+  },
+
   update: async (id: string, data: any) => {
     await prisma.employee.update({ where: { id }, data });
     await employeeService.computeAndUpdateDerivedFields(id);

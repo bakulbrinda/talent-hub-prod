@@ -1,6 +1,39 @@
 import { prisma } from '../lib/prisma';
 import { callClaude } from '../lib/claudeClient';
 
+// ─── Merit Matrix (company increment table) ───────────────────
+// Rows: performance tier (OS≥4.5, EP≥3.5, SP≥2.5, NI<2.5)
+// Cols: criticality C1, C2, C3, C4
+// Outer key: CTC salary band (1=≤12L, 2=12.1–20L, 3=20.1–30L, 4=>30L)
+const MERIT_MATRIX: Record<number, Record<string, Record<string, number>>> = {
+  1: { OS: { C1: 10, C2: 9, C3: 8, C4: 7 }, EP: { C1: 9, C2: 8, C3: 7, C4: 6 }, SP: { C1: 8, C2: 7, C3: 6, C4: 5 }, NI: { C1: 0, C2: 0, C3: 0, C4: 0 } },
+  2: { OS: { C1: 8, C2: 7, C3: 6, C4: 5 }, EP: { C1: 7, C2: 6, C3: 5, C4: 4 }, SP: { C1: 6, C2: 5, C3: 4, C4: 3 }, NI: { C1: 0, C2: 0, C3: 0, C4: 0 } },
+  3: { OS: { C1: 6, C2: 5, C3: 4, C4: 3 }, EP: { C1: 5, C2: 4, C3: 3, C4: 2 }, SP: { C1: 4, C2: 3, C3: 3, C4: 2 }, NI: { C1: 0, C2: 0, C3: 0, C4: 0 } },
+  4: { OS: { C1: 4, C2: 3, C3: 2, C4: 1 }, EP: { C1: 3, C2: 2, C3: 2, C4: 1 }, SP: { C1: 2, C2: 1, C3: 1, C4: 0 }, NI: { C1: 0, C2: 0, C3: 0, C4: 0 } },
+};
+
+function getSalaryBandTier(annualCtc: number): number {
+  const l = annualCtc / 100000; // convert to lakhs
+  if (l <= 12)  return 1;
+  if (l <= 20)  return 2;
+  if (l <= 30)  return 3;
+  return 4;
+}
+
+function getPerformanceTier(rating: number): string {
+  if (rating >= 4.5) return 'OS';
+  if (rating >= 3.5) return 'EP';
+  if (rating >= 2.5) return 'SP';
+  return 'NI';
+}
+
+function getMeritIncrement(annualCtc: number, rating: number, criticality: string | null): number {
+  const tier = getSalaryBandTier(annualCtc);
+  const perf = getPerformanceTier(rating);
+  const crit = criticality && ['C1','C2','C3','C4'].includes(criticality) ? criticality : 'C4';
+  return MERIT_MATRIX[tier]?.[perf]?.[crit] ?? 0;
+}
+
 interface ScenarioRule {
   filter: {
     band?: string | string[];
@@ -11,7 +44,7 @@ interface ScenarioRule {
     tenure?: { min: number };
   };
   action: {
-    type: 'RAISE_PERCENT' | 'RAISE_FLAT' | 'SET_TO_BENCHMARK' | 'SET_COMPA_RATIO';
+    type: 'RAISE_PERCENT' | 'RAISE_FLAT' | 'SET_TO_BENCHMARK' | 'SET_COMPA_RATIO' | 'MERIT_MATRIX';
     value: number;
   };
 }
@@ -77,6 +110,9 @@ function applyAction(
   currentFixed: number,
   action: ScenarioRule['action'],
   bandMid?: number,
+  empCtc?: number,
+  empRating?: number,
+  empCriticality?: string | null,
 ): number {
   switch (action.type) {
     case 'RAISE_PERCENT':
@@ -87,6 +123,12 @@ function applyAction(
       return bandMid ? bandMid * (action.value / 100) : currentFixed;
     case 'SET_TO_BENCHMARK':
       return bandMid ?? currentFixed;
+    case 'MERIT_MATRIX': {
+      const ctc = empCtc ?? currentFixed;
+      const rating = empRating ?? 0;
+      const incrementPct = getMeritIncrement(ctc, rating, empCriticality ?? null);
+      return currentFixed * (1 + incrementPct / 100);
+    }
     default:
       return currentFixed;
   }
@@ -143,7 +185,8 @@ export const scenarioService = {
       for (const emp of employees) {
         const current = Number(emp.annualFixed);
         const bandMid = bandMidMap[emp.band];
-        const projected = applyAction(current, rule.action, bandMid);
+        const latestRating = Number(emp.performanceRatings[0]?.rating ?? 0);
+        const projected = applyAction(current, rule.action, bandMid, Number(emp.annualCtc), latestRating, (emp as any).criticality);
         const existing = affectedMap.get(emp.id);
         affectedMap.set(emp.id, {
           currentFixed: existing?.currentFixed ?? current,
@@ -219,7 +262,8 @@ export const scenarioService = {
       for (const emp of employees) {
         const current = Number(emp.annualFixed);
         const bandMid = bandMidMap[emp.band];
-        const projected = applyAction(current, rule.action, bandMid);
+        const latestRating = Number(emp.performanceRatings[0]?.rating ?? 0);
+        const projected = applyAction(current, rule.action, bandMid, Number(emp.annualCtc), latestRating, (emp as any).criticality);
         if (projected !== current) {
           await prisma.employee.update({
             where: { id: emp.id },

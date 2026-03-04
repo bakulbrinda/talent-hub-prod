@@ -12,6 +12,7 @@ import {
   ScenarioStatus,
   NotificationType,
   NotificationSeverity,
+  Criticality,
 } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -41,6 +42,8 @@ async function main() {
   await prisma.band.deleteMany();
   await prisma.jobFamily.deleteMany();
   await prisma.jobArea.deleteMany();
+  await prisma.auditLog.deleteMany();
+  await prisma.userInvite.deleteMany();
   await prisma.refreshToken.deleteMany();
   await prisma.user.deleteMany();
 
@@ -74,12 +77,16 @@ async function main() {
   console.log('✅ Job families created');
 
   // ─── Bands ────────────────────────────────────────────────────────────────
-  const bandA1 = await prisma.band.create({ data: { code: 'A1', label: 'Associate', level: 1, isEligibleForRSU: false } });
-  const bandA2 = await prisma.band.create({ data: { code: 'A2', label: 'Senior Associate', level: 2, isEligibleForRSU: false } });
-  const bandP1 = await prisma.band.create({ data: { code: 'P1', label: 'Professional', level: 3, isEligibleForRSU: false } });
-  const bandP2 = await prisma.band.create({ data: { code: 'P2', label: 'Senior Professional', level: 4, isEligibleForRSU: true } });
-  const bandP3 = await prisma.band.create({ data: { code: 'P3', label: 'Lead', level: 5, isEligibleForRSU: true } });
-  const bandP4 = await prisma.band.create({ data: { code: 'P4', label: 'Principal / Manager', level: 6, isEligibleForRSU: true } });
+  const bandA1 = await prisma.band.create({ data: { code: 'A1', label: 'Associate',           level: 1,  isEligibleForRSU: false } });
+  const bandA2 = await prisma.band.create({ data: { code: 'A2', label: 'Senior Associate',    level: 2,  isEligibleForRSU: false } });
+  const bandP1 = await prisma.band.create({ data: { code: 'P1', label: 'Professional',        level: 3,  isEligibleForRSU: false } });
+  const bandP2 = await prisma.band.create({ data: { code: 'P2', label: 'Senior Professional', level: 4,  isEligibleForRSU: true  } });
+  const bandP3 = await prisma.band.create({ data: { code: 'P3', label: 'Lead',                level: 5,  isEligibleForRSU: true  } });
+  const bandM1 = await prisma.band.create({ data: { code: 'M1', label: 'Manager I',           level: 6,  isEligibleForRSU: true  } });
+  const bandM2 = await prisma.band.create({ data: { code: 'M2', label: 'Manager II',          level: 7,  isEligibleForRSU: true  } });
+  const bandD0 = await prisma.band.create({ data: { code: 'D0', label: 'Director I',          level: 8,  isEligibleForRSU: true  } });
+  const bandD1 = await prisma.band.create({ data: { code: 'D1', label: 'Director II',         level: 9,  isEligibleForRSU: true  } });
+  const bandD2 = await prisma.band.create({ data: { code: 'D2', label: 'VP / C-Suite',        level: 10, isEligibleForRSU: true  } });
   console.log('✅ Bands created');
 
   // ─── Grades ───────────────────────────────────────────────────────────────
@@ -94,8 +101,11 @@ async function main() {
       { bandId: bandP2.id, gradeCode: 'P2-2', description: 'Senior II' },
       { bandId: bandP3.id, gradeCode: 'P3-1', description: 'Lead' },
       { bandId: bandP3.id, gradeCode: 'P3-2', description: 'Staff' },
-      { bandId: bandP4.id, gradeCode: 'P4-1', description: 'Principal' },
-      { bandId: bandP4.id, gradeCode: 'P4-2', description: 'Senior Manager' },
+      { bandId: bandM1.id, gradeCode: 'M1-1', description: 'Manager I' },
+      { bandId: bandM2.id, gradeCode: 'M2-1', description: 'Manager II' },
+      { bandId: bandD0.id, gradeCode: 'D0-1', description: 'Director I' },
+      { bandId: bandD1.id, gradeCode: 'D1-1', description: 'Director II' },
+      { bandId: bandD2.id, gradeCode: 'D2-1', description: 'VP / C-Suite' },
     ],
   });
   const grades = await prisma.grade.findMany();
@@ -107,7 +117,8 @@ async function main() {
   const jcSDE2 = await prisma.jobCode.create({ data: { code: 'T-BE-P1', title: 'Software Engineer II', jobFamilyId: jfBackend.id, bandId: bandP1.id, gradeId: gMap['P1-1'].id } });
   const jcSSDE = await prisma.jobCode.create({ data: { code: 'T-BE-P2', title: 'Senior Software Engineer', jobFamilyId: jfBackend.id, bandId: bandP2.id, gradeId: gMap['P2-1'].id } });
   const jcStaff = await prisma.jobCode.create({ data: { code: 'T-BE-P3', title: 'Staff Engineer', jobFamilyId: jfBackend.id, bandId: bandP3.id, gradeId: gMap['P3-2'].id } });
-  const jcPrincipal = await prisma.jobCode.create({ data: { code: 'T-BE-P4', title: 'Principal Engineer', jobFamilyId: jfBackend.id, bandId: bandP4.id, gradeId: gMap['P4-1'].id } });
+  const jcEngM1 = await prisma.jobCode.create({ data: { code: 'T-BE-M1', title: 'Engineering Manager', jobFamilyId: jfBackend.id, bandId: bandM1.id, gradeId: gMap['M1-1'].id } });
+  const jcEngM2 = await prisma.jobCode.create({ data: { code: 'T-BE-M2', title: 'Senior Engineering Manager', jobFamilyId: jfBackend.id, bandId: bandM2.id, gradeId: gMap['M2-1'].id } });
   const jcFE1 = await prisma.jobCode.create({ data: { code: 'T-FE-P1', title: 'Frontend Engineer', jobFamilyId: jfFrontend.id, bandId: bandP1.id, gradeId: gMap['P1-1'].id } });
   const jcFE2 = await prisma.jobCode.create({ data: { code: 'T-FE-P2', title: 'Senior Frontend Engineer', jobFamilyId: jfFrontend.id, bandId: bandP2.id, gradeId: gMap['P2-1'].id } });
   const jcMLE = await prisma.jobCode.create({ data: { code: 'T-ML-P2', title: 'ML Engineer', jobFamilyId: jfData.id, bandId: bandP2.id, gradeId: gMap['P2-2'].id } });
@@ -145,11 +156,16 @@ async function main() {
   // ─── Salary Bands ─────────────────────────────────────────────────────────
   const now = new Date();
   const sbData = [
-    { bandId: bandA2.id, jobAreaId: eng.id, min: 600000, mid: 800000, max: 1000000 },
+    { bandId: bandA1.id, jobAreaId: null,    min:  300000, mid:  450000, max:   600000 },
+    { bandId: bandA2.id, jobAreaId: eng.id,  min:  600000, mid:  800000, max: 1000000 },
     { bandId: bandP1.id, jobAreaId: eng.id, min: 900000, mid: 1200000, max: 1500000 },
     { bandId: bandP2.id, jobAreaId: eng.id, min: 1400000, mid: 1900000, max: 2400000 },
     { bandId: bandP3.id, jobAreaId: eng.id, min: 2200000, mid: 3000000, max: 3800000 },
-    { bandId: bandP4.id, jobAreaId: eng.id, min: 3500000, mid: 4500000, max: 5500000 },
+    { bandId: bandM1.id, jobAreaId: eng.id, min:  3500000, mid:  4500000, max:  5500000 },
+    { bandId: bandM2.id, jobAreaId: eng.id, min:  5000000, mid:  6500000, max:  8000000 },
+    { bandId: bandD0.id, jobAreaId: null,   min:  5500000, mid:  7000000, max:  9000000 },
+    { bandId: bandD1.id, jobAreaId: null,   min:  8000000, mid: 10000000, max: 12500000 },
+    { bandId: bandD2.id, jobAreaId: null,   min: 11000000, mid: 14000000, max: 18000000 },
     { bandId: bandA2.id, jobAreaId: sales.id, min: 400000, mid: 600000, max: 800000 },
     { bandId: bandP1.id, jobAreaId: sales.id, min: 700000, mid: 950000, max: 1200000 },
     { bandId: bandP2.id, jobAreaId: sales.id, min: 1100000, mid: 1500000, max: 1900000 },
@@ -178,7 +194,7 @@ async function main() {
   console.log('✅ Salary bands and benchmarks created');
 
   // ─── Employee helper ───────────────────────────────────────────────────────
-  type EmpDef = { fn: string; ln: string; dept: string; desig: string; band: string; gradeCode: string; jobAreaId: string; jcId: string; gender: Gender; sal: number; join: Date; loc: string; mode: WorkMode };
+  type EmpDef = { fn: string; ln: string; dept: string; desig: string; band: string; gradeCode: string; jobAreaId: string; jcId: string; gender: Gender; sal: number; join: Date; loc: string; mode: WorkMode; crit: Criticality };
 
   const makeEmp = async (e: EmpDef, idx: number) => {
     const basic = Math.round(e.sal * 0.35);
@@ -200,103 +216,105 @@ async function main() {
         april2023: Math.round(e.sal * 0.85), july2023: Math.round(e.sal * 0.88),
         april2024: Math.round(e.sal * 0.93), july2024: e.sal,
         lastIncrementDate: new Date('2024-07-01'), lastIncrementPercent: 8.5,
+        criticality: e.crit,
         addedBy: admin.id,
       },
     });
   };
 
   const E = eng.id, S = sales.id, O = ops.id, H = hr.id, F = finance.id, P = product.id;
+  const C1 = Criticality.C1, C2 = Criticality.C2, C3 = Criticality.C3, C4 = Criticality.C4;
   const empDefs: EmpDef[] = [
-    // ── Engineering P4 (3) ──
-    { fn:'Vikram', ln:'Sharma', dept:'Engineering', desig:'Principal Engineer', band:'P4', jobAreaId:E, jcId:jcPrincipal.id, gradeCode:'P4-1', gender:Gender.MALE, sal:4800000, join:new Date('2019-03-15'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Priya', ln:'Nair', dept:'Engineering', desig:'Principal Engineer', band:'P4', jobAreaId:E, jcId:jcPrincipal.id, gradeCode:'P4-1', gender:Gender.FEMALE, sal:4200000, join:new Date('2019-08-20'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Arjun', ln:'Mehta', dept:'Engineering', desig:'Senior Manager Engineering', band:'P4', jobAreaId:E, jcId:jcPrincipal.id, gradeCode:'P4-2', gender:Gender.MALE, sal:5200000, join:new Date('2018-01-10'), loc:'Bangalore', mode:WorkMode.ONSITE },
+    // ── Engineering M1/M2 (3, formerly P4) ──
+    { fn:'Vikram', ln:'Sharma', dept:'Engineering', desig:'Engineering Manager', band:'M1', jobAreaId:E, jcId:jcEngM1.id, gradeCode:'M1-1', gender:Gender.MALE, sal:4800000, join:new Date('2019-03-15'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C1 },
+    { fn:'Priya', ln:'Nair', dept:'Engineering', desig:'Engineering Manager', band:'M1', jobAreaId:E, jcId:jcEngM1.id, gradeCode:'M1-1', gender:Gender.FEMALE, sal:4200000, join:new Date('2019-08-20'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C1 },
+    { fn:'Arjun', ln:'Mehta', dept:'Engineering', desig:'Senior Engineering Manager', band:'M2', jobAreaId:E, jcId:jcEngM2.id, gradeCode:'M2-1', gender:Gender.MALE, sal:5200000, join:new Date('2018-01-10'), loc:'Bangalore', mode:WorkMode.ONSITE, crit:C1 },
     // ── Engineering P3 (4) ──
-    { fn:'Kavya', ln:'Reddy', dept:'Engineering', desig:'Staff Engineer', band:'P3', jobAreaId:E, jcId:jcStaff.id, gradeCode:'P3-2', gender:Gender.FEMALE, sal:3200000, join:new Date('2020-06-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Rahul', ln:'Gupta', dept:'Engineering', desig:'Staff Engineer', band:'P3', jobAreaId:E, jcId:jcStaff.id, gradeCode:'P3-2', gender:Gender.MALE, sal:3600000, join:new Date('2020-02-15'), loc:'Bangalore', mode:WorkMode.REMOTE },
-    { fn:'Sneha', ln:'Patel', dept:'Engineering', desig:'Lead Engineer', band:'P3', jobAreaId:E, jcId:jcStaff.id, gradeCode:'P3-1', gender:Gender.FEMALE, sal:2500000, join:new Date('2021-04-01'), loc:'Hyderabad', mode:WorkMode.HYBRID },
-    { fn:'Kiran', ln:'Rao', dept:'Engineering', desig:'Lead Engineer', band:'P3', jobAreaId:E, jcId:jcStaff.id, gradeCode:'P3-1', gender:Gender.MALE, sal:3100000, join:new Date('2020-09-01'), loc:'Bangalore', mode:WorkMode.ONSITE },
+    { fn:'Kavya', ln:'Reddy', dept:'Engineering', desig:'Staff Engineer', band:'P3', jobAreaId:E, jcId:jcStaff.id, gradeCode:'P3-2', gender:Gender.FEMALE, sal:3200000, join:new Date('2020-06-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C1 },
+    { fn:'Rahul', ln:'Gupta', dept:'Engineering', desig:'Staff Engineer', band:'P3', jobAreaId:E, jcId:jcStaff.id, gradeCode:'P3-2', gender:Gender.MALE, sal:3600000, join:new Date('2020-02-15'), loc:'Bangalore', mode:WorkMode.REMOTE, crit:C2 },
+    { fn:'Sneha', ln:'Patel', dept:'Engineering', desig:'Lead Engineer', band:'P3', jobAreaId:E, jcId:jcStaff.id, gradeCode:'P3-1', gender:Gender.FEMALE, sal:2500000, join:new Date('2021-04-01'), loc:'Hyderabad', mode:WorkMode.HYBRID, crit:C2 },
+    { fn:'Kiran', ln:'Rao', dept:'Engineering', desig:'Lead Engineer', band:'P3', jobAreaId:E, jcId:jcStaff.id, gradeCode:'P3-1', gender:Gender.MALE, sal:3100000, join:new Date('2020-09-01'), loc:'Bangalore', mode:WorkMode.ONSITE, crit:C3 },
     // ── Engineering P2 (9 — includes gender gap + 1 deliberately below band min) ──
-    { fn:'Aditya', ln:'Kumar', dept:'Engineering', desig:'Senior Software Engineer', band:'P2', jobAreaId:E, jcId:jcSSDE.id, gradeCode:'P2-1', gender:Gender.MALE, sal:2100000, join:new Date('2021-07-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Divya', ln:'Singh', dept:'Engineering', desig:'Senior Software Engineer', band:'P2', jobAreaId:E, jcId:jcSSDE.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1600000, join:new Date('2021-05-15'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Suresh', ln:'Iyer', dept:'Engineering', desig:'Senior ML Engineer', band:'P2', jobAreaId:E, jcId:jcMLE.id, gradeCode:'P2-2', gender:Gender.MALE, sal:2300000, join:new Date('2021-01-20'), loc:'Bangalore', mode:WorkMode.REMOTE },
-    { fn:'Ananya', ln:'Krishnan', dept:'Engineering', desig:'Senior ML Engineer', band:'P2', jobAreaId:E, jcId:jcMLE.id, gradeCode:'P2-2', gender:Gender.FEMALE, sal:1750000, join:new Date('2021-03-10'), loc:'Bangalore', mode:WorkMode.REMOTE },
-    { fn:'Manoj', ln:'Tiwari', dept:'Engineering', desig:'Senior Frontend Engineer', band:'P2', jobAreaId:E, jcId:jcFE2.id, gradeCode:'P2-1', gender:Gender.MALE, sal:1950000, join:new Date('2022-01-10'), loc:'Mumbai', mode:WorkMode.HYBRID },
-    { fn:'Pooja', ln:'Agarwal', dept:'Engineering', desig:'Senior Frontend Engineer', band:'P2', jobAreaId:E, jcId:jcFE2.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1500000, join:new Date('2022-03-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Nitin', ln:'Joshi', dept:'Engineering', desig:'Senior Software Engineer', band:'P2', jobAreaId:E, jcId:jcSSDE.id, gradeCode:'P2-2', gender:Gender.MALE, sal:2400000, join:new Date('2020-11-01'), loc:'Hyderabad', mode:WorkMode.ONSITE },
-    { fn:'Ritu', ln:'Sharma', dept:'Engineering', desig:'Senior Software Engineer', band:'P2', jobAreaId:E, jcId:jcSSDE.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1200000, join:new Date('2023-02-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
+    { fn:'Aditya', ln:'Kumar', dept:'Engineering', desig:'Senior Software Engineer', band:'P2', jobAreaId:E, jcId:jcSSDE.id, gradeCode:'P2-1', gender:Gender.MALE, sal:2100000, join:new Date('2021-07-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C2 },
+    { fn:'Divya', ln:'Singh', dept:'Engineering', desig:'Senior Software Engineer', band:'P2', jobAreaId:E, jcId:jcSSDE.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1600000, join:new Date('2021-05-15'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C1 },
+    { fn:'Suresh', ln:'Iyer', dept:'Engineering', desig:'Senior ML Engineer', band:'P2', jobAreaId:E, jcId:jcMLE.id, gradeCode:'P2-2', gender:Gender.MALE, sal:2300000, join:new Date('2021-01-20'), loc:'Bangalore', mode:WorkMode.REMOTE, crit:C1 },
+    { fn:'Ananya', ln:'Krishnan', dept:'Engineering', desig:'Senior ML Engineer', band:'P2', jobAreaId:E, jcId:jcMLE.id, gradeCode:'P2-2', gender:Gender.FEMALE, sal:1750000, join:new Date('2021-03-10'), loc:'Bangalore', mode:WorkMode.REMOTE, crit:C1 },
+    { fn:'Manoj', ln:'Tiwari', dept:'Engineering', desig:'Senior Frontend Engineer', band:'P2', jobAreaId:E, jcId:jcFE2.id, gradeCode:'P2-1', gender:Gender.MALE, sal:1950000, join:new Date('2022-01-10'), loc:'Mumbai', mode:WorkMode.HYBRID, crit:C3 },
+    { fn:'Pooja', ln:'Agarwal', dept:'Engineering', desig:'Senior Frontend Engineer', band:'P2', jobAreaId:E, jcId:jcFE2.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1500000, join:new Date('2022-03-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C2 },
+    { fn:'Nitin', ln:'Joshi', dept:'Engineering', desig:'Senior Software Engineer', band:'P2', jobAreaId:E, jcId:jcSSDE.id, gradeCode:'P2-2', gender:Gender.MALE, sal:2400000, join:new Date('2020-11-01'), loc:'Hyderabad', mode:WorkMode.ONSITE, crit:C4 },
+    { fn:'Ritu', ln:'Sharma', dept:'Engineering', desig:'Senior Software Engineer', band:'P2', jobAreaId:E, jcId:jcSSDE.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1200000, join:new Date('2023-02-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C3 },
     // BELOW BAND MIN (P2 Eng min=1400000) — pay anomaly for demo
-    { fn:'Tarun', ln:'Bose', dept:'Engineering', desig:'Senior Software Engineer', band:'P2', jobAreaId:E, jcId:jcSSDE.id, gradeCode:'P2-1', gender:Gender.MALE, sal:1100000, join:new Date('2023-11-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
+    { fn:'Tarun', ln:'Bose', dept:'Engineering', desig:'Senior Software Engineer', band:'P2', jobAreaId:E, jcId:jcSSDE.id, gradeCode:'P2-1', gender:Gender.MALE, sal:1100000, join:new Date('2023-11-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C3 },
     // ── Engineering P1 (6) ──
-    { fn:'Deepak', ln:'Verma', dept:'Engineering', desig:'Software Engineer II', band:'P1', jobAreaId:E, jcId:jcSDE2.id, gradeCode:'P1-1', gender:Gender.MALE, sal:1300000, join:new Date('2022-07-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Lakshmi', ln:'Balaji', dept:'Engineering', desig:'Software Engineer II', band:'P1', jobAreaId:E, jcId:jcSDE2.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:1000000, join:new Date('2022-09-15'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Rohit', ln:'Das', dept:'Engineering', desig:'Data Engineer', band:'P1', jobAreaId:E, jcId:jcDE.id, gradeCode:'P1-2', gender:Gender.MALE, sal:1400000, join:new Date('2022-04-01'), loc:'Bangalore', mode:WorkMode.REMOTE },
-    { fn:'Shreya', ln:'Mishra', dept:'Engineering', desig:'Frontend Engineer', band:'P1', jobAreaId:E, jcId:jcFE1.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:950000, join:new Date('2023-01-15'), loc:'Pune', mode:WorkMode.HYBRID },
-    { fn:'Abhishek', ln:'Sinha', dept:'Engineering', desig:'Software Engineer II', band:'P1', jobAreaId:E, jcId:jcSDE2.id, gradeCode:'P1-2', gender:Gender.MALE, sal:1250000, join:new Date('2023-03-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Priyanka', ln:'Nanda', dept:'Engineering', desig:'Data Engineer', band:'P1', jobAreaId:E, jcId:jcDE.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:880000, join:new Date('2023-06-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
+    { fn:'Deepak', ln:'Verma', dept:'Engineering', desig:'Software Engineer II', band:'P1', jobAreaId:E, jcId:jcSDE2.id, gradeCode:'P1-1', gender:Gender.MALE, sal:1300000, join:new Date('2022-07-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C3 },
+    { fn:'Lakshmi', ln:'Balaji', dept:'Engineering', desig:'Software Engineer II', band:'P1', jobAreaId:E, jcId:jcSDE2.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:1000000, join:new Date('2022-09-15'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C3 },
+    { fn:'Rohit', ln:'Das', dept:'Engineering', desig:'Data Engineer', band:'P1', jobAreaId:E, jcId:jcDE.id, gradeCode:'P1-2', gender:Gender.MALE, sal:1400000, join:new Date('2022-04-01'), loc:'Bangalore', mode:WorkMode.REMOTE, crit:C2 },
+    { fn:'Shreya', ln:'Mishra', dept:'Engineering', desig:'Frontend Engineer', band:'P1', jobAreaId:E, jcId:jcFE1.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:950000, join:new Date('2023-01-15'), loc:'Pune', mode:WorkMode.HYBRID, crit:C4 },
+    { fn:'Abhishek', ln:'Sinha', dept:'Engineering', desig:'Software Engineer II', band:'P1', jobAreaId:E, jcId:jcSDE2.id, gradeCode:'P1-2', gender:Gender.MALE, sal:1250000, join:new Date('2023-03-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C3 },
+    { fn:'Priyanka', ln:'Nanda', dept:'Engineering', desig:'Data Engineer', band:'P1', jobAreaId:E, jcId:jcDE.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:880000, join:new Date('2023-06-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C4 },
     // ── Engineering A2 (3) ──
-    { fn:'Amit', ln:'Pandey', dept:'Engineering', desig:'Software Engineer I', band:'A2', jobAreaId:E, jcId:jcSDE1.id, gradeCode:'A2-1', gender:Gender.MALE, sal:750000, join:new Date('2023-07-01'), loc:'Bangalore', mode:WorkMode.ONSITE },
-    { fn:'Neha', ln:'Jain', dept:'Engineering', desig:'Software Engineer I', band:'A2', jobAreaId:E, jcId:jcSDE1.id, gradeCode:'A2-1', gender:Gender.FEMALE, sal:650000, join:new Date('2023-08-15'), loc:'Bangalore', mode:WorkMode.ONSITE },
-    { fn:'Gaurav', ln:'Malik', dept:'Engineering', desig:'Software Engineer I', band:'A2', jobAreaId:E, jcId:jcSDE1.id, gradeCode:'A2-1', gender:Gender.MALE, sal:820000, join:new Date('2023-06-15'), loc:'Hyderabad', mode:WorkMode.ONSITE },
+    { fn:'Amit', ln:'Pandey', dept:'Engineering', desig:'Software Engineer I', band:'A2', jobAreaId:E, jcId:jcSDE1.id, gradeCode:'A2-1', gender:Gender.MALE, sal:750000, join:new Date('2023-07-01'), loc:'Bangalore', mode:WorkMode.ONSITE, crit:C4 },
+    { fn:'Neha', ln:'Jain', dept:'Engineering', desig:'Software Engineer I', band:'A2', jobAreaId:E, jcId:jcSDE1.id, gradeCode:'A2-1', gender:Gender.FEMALE, sal:650000, join:new Date('2023-08-15'), loc:'Bangalore', mode:WorkMode.ONSITE, crit:C4 },
+    { fn:'Gaurav', ln:'Malik', dept:'Engineering', desig:'Software Engineer I', band:'A2', jobAreaId:E, jcId:jcSDE1.id, gradeCode:'A2-1', gender:Gender.MALE, sal:820000, join:new Date('2023-06-15'), loc:'Hyderabad', mode:WorkMode.ONSITE, crit:C3 },
 
     // ── Sales (12) ──
-    { fn:'Rajiv', ln:'Khanna', dept:'Sales', desig:'Senior Account Executive', band:'P2', jobAreaId:S, jcId:jcSAE.id, gradeCode:'P2-1', gender:Gender.MALE, sal:1600000, join:new Date('2020-03-01'), loc:'Mumbai', mode:WorkMode.HYBRID },
-    { fn:'Simran', ln:'Kaur', dept:'Sales', desig:'Senior Account Executive', band:'P2', jobAreaId:S, jcId:jcSAE.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1300000, join:new Date('2020-06-15'), loc:'Delhi', mode:WorkMode.HYBRID },
-    { fn:'Varun', ln:'Ahuja', dept:'Sales', desig:'Account Executive', band:'P1', jobAreaId:S, jcId:jcAE1.id, gradeCode:'P1-1', gender:Gender.MALE, sal:1050000, join:new Date('2021-08-01'), loc:'Mumbai', mode:WorkMode.ONSITE },
-    { fn:'Meera', ln:'Bhat', dept:'Sales', desig:'Account Executive', band:'P1', jobAreaId:S, jcId:jcAE1.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:800000, join:new Date('2022-01-10'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Sanjay', ln:'Pillai', dept:'Sales', desig:'Account Executive', band:'P1', jobAreaId:S, jcId:jcAE1.id, gradeCode:'P1-1', gender:Gender.MALE, sal:950000, join:new Date('2021-10-01'), loc:'Chennai', mode:WorkMode.ONSITE },
-    { fn:'Isha', ln:'Bansal', dept:'Sales', desig:'SDR', band:'A2', jobAreaId:S, jcId:jcSDR1.id, gradeCode:'A2-2', gender:Gender.FEMALE, sal:550000, join:new Date('2023-04-01'), loc:'Delhi', mode:WorkMode.HYBRID },
-    { fn:'Pranav', ln:'Sethi', dept:'Sales', desig:'SDR', band:'A2', jobAreaId:S, jcId:jcSDR1.id, gradeCode:'A2-2', gender:Gender.MALE, sal:620000, join:new Date('2023-03-15'), loc:'Mumbai', mode:WorkMode.HYBRID },
-    { fn:'Kritika', ln:'Kapoor', dept:'Sales', desig:'Senior Account Executive', band:'P2', jobAreaId:S, jcId:jcSAE.id, gradeCode:'P2-2', gender:Gender.FEMALE, sal:1450000, join:new Date('2020-12-01'), loc:'Mumbai', mode:WorkMode.HYBRID },
-    { fn:'Sachin', ln:'Ghosh', dept:'Sales', desig:'Senior Account Executive', band:'P2', jobAreaId:S, jcId:jcSAE.id, gradeCode:'P2-2', gender:Gender.MALE, sal:1800000, join:new Date('2019-11-01'), loc:'Mumbai', mode:WorkMode.HYBRID },
+    { fn:'Rajiv', ln:'Khanna', dept:'Sales', desig:'Senior Account Executive', band:'P2', jobAreaId:S, jcId:jcSAE.id, gradeCode:'P2-1', gender:Gender.MALE, sal:1600000, join:new Date('2020-03-01'), loc:'Mumbai', mode:WorkMode.HYBRID, crit:C1 },
+    { fn:'Simran', ln:'Kaur', dept:'Sales', desig:'Senior Account Executive', band:'P2', jobAreaId:S, jcId:jcSAE.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1300000, join:new Date('2020-06-15'), loc:'Delhi', mode:WorkMode.HYBRID, crit:C2 },
+    { fn:'Varun', ln:'Ahuja', dept:'Sales', desig:'Account Executive', band:'P1', jobAreaId:S, jcId:jcAE1.id, gradeCode:'P1-1', gender:Gender.MALE, sal:1050000, join:new Date('2021-08-01'), loc:'Mumbai', mode:WorkMode.ONSITE, crit:C2 },
+    { fn:'Meera', ln:'Bhat', dept:'Sales', desig:'Account Executive', band:'P1', jobAreaId:S, jcId:jcAE1.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:800000, join:new Date('2022-01-10'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C4 },
+    { fn:'Sanjay', ln:'Pillai', dept:'Sales', desig:'Account Executive', band:'P1', jobAreaId:S, jcId:jcAE1.id, gradeCode:'P1-1', gender:Gender.MALE, sal:950000, join:new Date('2021-10-01'), loc:'Chennai', mode:WorkMode.ONSITE, crit:C3 },
+    { fn:'Isha', ln:'Bansal', dept:'Sales', desig:'SDR', band:'A2', jobAreaId:S, jcId:jcSDR1.id, gradeCode:'A2-2', gender:Gender.FEMALE, sal:550000, join:new Date('2023-04-01'), loc:'Delhi', mode:WorkMode.HYBRID, crit:C4 },
+    { fn:'Pranav', ln:'Sethi', dept:'Sales', desig:'SDR', band:'A2', jobAreaId:S, jcId:jcSDR1.id, gradeCode:'A2-2', gender:Gender.MALE, sal:620000, join:new Date('2023-03-15'), loc:'Mumbai', mode:WorkMode.HYBRID, crit:C4 },
+    { fn:'Kritika', ln:'Kapoor', dept:'Sales', desig:'Senior Account Executive', band:'P2', jobAreaId:S, jcId:jcSAE.id, gradeCode:'P2-2', gender:Gender.FEMALE, sal:1450000, join:new Date('2020-12-01'), loc:'Mumbai', mode:WorkMode.HYBRID, crit:C2 },
+    { fn:'Sachin', ln:'Ghosh', dept:'Sales', desig:'Senior Account Executive', band:'P2', jobAreaId:S, jcId:jcSAE.id, gradeCode:'P2-2', gender:Gender.MALE, sal:1800000, join:new Date('2019-11-01'), loc:'Mumbai', mode:WorkMode.HYBRID, crit:C2 },
     // BELOW BAND MIN — pay anomaly
-    { fn:'Manish', ln:'Rastogi', dept:'Sales', desig:'Senior Account Executive', band:'P2', jobAreaId:S, jcId:jcSAE.id, gradeCode:'P2-1', gender:Gender.MALE, sal:950000, join:new Date('2024-01-15'), loc:'Delhi', mode:WorkMode.HYBRID },
-    { fn:'Radha', ln:'Venkat', dept:'Sales', desig:'Account Executive', band:'P1', jobAreaId:S, jcId:jcAE1.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:870000, join:new Date('2022-08-01'), loc:'Hyderabad', mode:WorkMode.HYBRID },
-    { fn:'Kunal', ln:'Desai', dept:'Sales', desig:'SDR', band:'A2', jobAreaId:S, jcId:jcSDR1.id, gradeCode:'A2-2', gender:Gender.MALE, sal:580000, join:new Date('2023-10-01'), loc:'Mumbai', mode:WorkMode.ONSITE },
+    { fn:'Manish', ln:'Rastogi', dept:'Sales', desig:'Senior Account Executive', band:'P2', jobAreaId:S, jcId:jcSAE.id, gradeCode:'P2-1', gender:Gender.MALE, sal:950000, join:new Date('2024-01-15'), loc:'Delhi', mode:WorkMode.HYBRID, crit:C4 },
+    { fn:'Radha', ln:'Venkat', dept:'Sales', desig:'Account Executive', band:'P1', jobAreaId:S, jcId:jcAE1.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:870000, join:new Date('2022-08-01'), loc:'Hyderabad', mode:WorkMode.HYBRID, crit:C3 },
+    { fn:'Kunal', ln:'Desai', dept:'Sales', desig:'SDR', band:'A2', jobAreaId:S, jcId:jcSDR1.id, gradeCode:'A2-2', gender:Gender.MALE, sal:580000, join:new Date('2023-10-01'), loc:'Mumbai', mode:WorkMode.ONSITE, crit:C4 },
 
     // ── Product (9) ──
-    { fn:'Neeraj', ln:'Oberoi', dept:'Product', desig:'Senior Product Manager', band:'P3', jobAreaId:P, jcId:jcSPM.id, gradeCode:'P3-1', gender:Gender.MALE, sal:3400000, join:new Date('2019-06-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Tanvi', ln:'Bhosale', dept:'Product', desig:'Senior Product Manager', band:'P3', jobAreaId:P, jcId:jcSPM.id, gradeCode:'P3-1', gender:Gender.FEMALE, sal:2800000, join:new Date('2020-02-01'), loc:'Mumbai', mode:WorkMode.HYBRID },
-    { fn:'Rohan', ln:'Choudhary', dept:'Product', desig:'Senior PM', band:'P3', jobAreaId:P, jcId:jcSPM.id, gradeCode:'P3-2', gender:Gender.MALE, sal:3600000, join:new Date('2019-04-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Harish', ln:'Saxena', dept:'Product', desig:'Product Manager', band:'P2', jobAreaId:P, jcId:jcPM1.id, gradeCode:'P2-1', gender:Gender.MALE, sal:2200000, join:new Date('2021-03-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Pallavi', ln:'Menon', dept:'Product', desig:'Product Manager', band:'P2', jobAreaId:P, jcId:jcPM1.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1900000, join:new Date('2021-07-15'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Shivam', ln:'Goyal', dept:'Product', desig:'Product Manager', band:'P2', jobAreaId:P, jcId:jcPM1.id, gradeCode:'P2-2', gender:Gender.MALE, sal:2400000, join:new Date('2020-10-01'), loc:'Hyderabad', mode:WorkMode.HYBRID },
-    { fn:'Aparna', ln:'Nambiar', dept:'Product', desig:'Product Manager', band:'P2', jobAreaId:P, jcId:jcPM1.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1700000, join:new Date('2022-02-01'), loc:'Bangalore', mode:WorkMode.REMOTE },
-    { fn:'Dhruv', ln:'Thakur', dept:'Product', desig:'Product Manager', band:'P2', jobAreaId:P, jcId:jcPM1.id, gradeCode:'P2-1', gender:Gender.MALE, sal:2100000, join:new Date('2022-04-15'), loc:'Bangalore', mode:WorkMode.HYBRID },
+    { fn:'Neeraj', ln:'Oberoi', dept:'Product', desig:'Senior Product Manager', band:'P3', jobAreaId:P, jcId:jcSPM.id, gradeCode:'P3-1', gender:Gender.MALE, sal:3400000, join:new Date('2019-06-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C1 },
+    { fn:'Tanvi', ln:'Bhosale', dept:'Product', desig:'Senior Product Manager', band:'P3', jobAreaId:P, jcId:jcSPM.id, gradeCode:'P3-1', gender:Gender.FEMALE, sal:2800000, join:new Date('2020-02-01'), loc:'Mumbai', mode:WorkMode.HYBRID, crit:C2 },
+    { fn:'Rohan', ln:'Choudhary', dept:'Product', desig:'Senior PM', band:'P3', jobAreaId:P, jcId:jcSPM.id, gradeCode:'P3-2', gender:Gender.MALE, sal:3600000, join:new Date('2019-04-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C1 },
+    { fn:'Harish', ln:'Saxena', dept:'Product', desig:'Product Manager', band:'P2', jobAreaId:P, jcId:jcPM1.id, gradeCode:'P2-1', gender:Gender.MALE, sal:2200000, join:new Date('2021-03-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C2 },
+    { fn:'Pallavi', ln:'Menon', dept:'Product', desig:'Product Manager', band:'P2', jobAreaId:P, jcId:jcPM1.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1900000, join:new Date('2021-07-15'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C3 },
+    { fn:'Shivam', ln:'Goyal', dept:'Product', desig:'Product Manager', band:'P2', jobAreaId:P, jcId:jcPM1.id, gradeCode:'P2-2', gender:Gender.MALE, sal:2400000, join:new Date('2020-10-01'), loc:'Hyderabad', mode:WorkMode.HYBRID, crit:C2 },
+    { fn:'Aparna', ln:'Nambiar', dept:'Product', desig:'Product Manager', band:'P2', jobAreaId:P, jcId:jcPM1.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1700000, join:new Date('2022-02-01'), loc:'Bangalore', mode:WorkMode.REMOTE, crit:C3 },
+    { fn:'Dhruv', ln:'Thakur', dept:'Product', desig:'Product Manager', band:'P2', jobAreaId:P, jcId:jcPM1.id, gradeCode:'P2-1', gender:Gender.MALE, sal:2100000, join:new Date('2022-04-15'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C3 },
     // ABOVE BAND MAX (P2 Product max=2500000) — pay anomaly
-    { fn:'Sunita', ln:'Rawat', dept:'Product', desig:'Product Manager', band:'P2', jobAreaId:P, jcId:jcPM1.id, gradeCode:'P2-2', gender:Gender.FEMALE, sal:2900000, join:new Date('2021-01-01'), loc:'Delhi', mode:WorkMode.REMOTE },
+    { fn:'Sunita', ln:'Rawat', dept:'Product', desig:'Product Manager', band:'P2', jobAreaId:P, jcId:jcPM1.id, gradeCode:'P2-2', gender:Gender.FEMALE, sal:2900000, join:new Date('2021-01-01'), loc:'Delhi', mode:WorkMode.REMOTE, crit:C4 },
 
     // ── HR (8) ──
-    { fn:'Archana', ln:'Dubey', dept:'HR', desig:'HR Business Partner', band:'P2', jobAreaId:H, jcId:jcHRBP1.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1400000, join:new Date('2020-08-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Ramesh', ln:'Nair', dept:'HR', desig:'HR Business Partner', band:'P2', jobAreaId:H, jcId:jcHRBP1.id, gradeCode:'P2-1', gender:Gender.MALE, sal:1600000, join:new Date('2019-12-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Jayanti', ln:'Kulkarni', dept:'HR', desig:'Technical Recruiter', band:'P1', jobAreaId:H, jcId:jcTA1.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:750000, join:new Date('2022-01-15'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Santosh', ln:'Kadam', dept:'HR', desig:'Technical Recruiter', band:'P1', jobAreaId:H, jcId:jcTA1.id, gradeCode:'P1-1', gender:Gender.MALE, sal:900000, join:new Date('2021-06-01'), loc:'Mumbai', mode:WorkMode.HYBRID },
-    { fn:'Harsha', ln:'Rao', dept:'HR', desig:'Technical Recruiter', band:'P1', jobAreaId:H, jcId:jcTA1.id, gradeCode:'P1-2', gender:Gender.FEMALE, sal:800000, join:new Date('2022-11-01'), loc:'Hyderabad', mode:WorkMode.HYBRID },
-    { fn:'Girish', ln:'Patil', dept:'HR', desig:'Senior HR Business Partner', band:'P2', jobAreaId:H, jcId:jcHRBP1.id, gradeCode:'P2-2', gender:Gender.MALE, sal:1750000, join:new Date('2020-01-15'), loc:'Pune', mode:WorkMode.ONSITE },
-    { fn:'Seema', ln:'Tripathi', dept:'HR', desig:'HR Business Partner', band:'P2', jobAreaId:H, jcId:jcHRBP1.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1100000, join:new Date('2022-06-01'), loc:'Delhi', mode:WorkMode.HYBRID },
-    { fn:'Mukesh', ln:'Soni', dept:'HR', desig:'Technical Recruiter', band:'P1', jobAreaId:H, jcId:jcTA1.id, gradeCode:'P1-1', gender:Gender.MALE, sal:700000, join:new Date('2023-04-01'), loc:'Bangalore', mode:WorkMode.ONSITE },
+    { fn:'Archana', ln:'Dubey', dept:'HR', desig:'HR Business Partner', band:'P2', jobAreaId:H, jcId:jcHRBP1.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1400000, join:new Date('2020-08-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C3 },
+    { fn:'Ramesh', ln:'Nair', dept:'HR', desig:'HR Business Partner', band:'P2', jobAreaId:H, jcId:jcHRBP1.id, gradeCode:'P2-1', gender:Gender.MALE, sal:1600000, join:new Date('2019-12-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C2 },
+    { fn:'Jayanti', ln:'Kulkarni', dept:'HR', desig:'Technical Recruiter', band:'P1', jobAreaId:H, jcId:jcTA1.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:750000, join:new Date('2022-01-15'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C4 },
+    { fn:'Santosh', ln:'Kadam', dept:'HR', desig:'Technical Recruiter', band:'P1', jobAreaId:H, jcId:jcTA1.id, gradeCode:'P1-1', gender:Gender.MALE, sal:900000, join:new Date('2021-06-01'), loc:'Mumbai', mode:WorkMode.HYBRID, crit:C3 },
+    { fn:'Harsha', ln:'Rao', dept:'HR', desig:'Technical Recruiter', band:'P1', jobAreaId:H, jcId:jcTA1.id, gradeCode:'P1-2', gender:Gender.FEMALE, sal:800000, join:new Date('2022-11-01'), loc:'Hyderabad', mode:WorkMode.HYBRID, crit:C4 },
+    { fn:'Girish', ln:'Patil', dept:'HR', desig:'Senior HR Business Partner', band:'P2', jobAreaId:H, jcId:jcHRBP1.id, gradeCode:'P2-2', gender:Gender.MALE, sal:1750000, join:new Date('2020-01-15'), loc:'Pune', mode:WorkMode.ONSITE, crit:C2 },
+    { fn:'Seema', ln:'Tripathi', dept:'HR', desig:'HR Business Partner', band:'P2', jobAreaId:H, jcId:jcHRBP1.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1100000, join:new Date('2022-06-01'), loc:'Delhi', mode:WorkMode.HYBRID, crit:C3 },
+    { fn:'Mukesh', ln:'Soni', dept:'HR', desig:'Technical Recruiter', band:'P1', jobAreaId:H, jcId:jcTA1.id, gradeCode:'P1-1', gender:Gender.MALE, sal:700000, join:new Date('2023-04-01'), loc:'Bangalore', mode:WorkMode.ONSITE, crit:C4 },
 
     // ── Finance (7) ──
-    { fn:'Chetan', ln:'Shah', dept:'Finance', desig:'Senior Financial Analyst', band:'P2', jobAreaId:F, jcId:jcFPA.id, gradeCode:'P2-2', gender:Gender.MALE, sal:1600000, join:new Date('2020-05-01'), loc:'Mumbai', mode:WorkMode.ONSITE },
-    { fn:'Ranjana', ln:'Pillai', dept:'Finance', desig:'Financial Analyst', band:'P2', jobAreaId:F, jcId:jcFPA.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1200000, join:new Date('2021-03-15'), loc:'Mumbai', mode:WorkMode.HYBRID },
-    { fn:'Mithun', ln:'Roy', dept:'Finance', desig:'Financial Analyst', band:'P2', jobAreaId:F, jcId:jcFPA.id, gradeCode:'P2-1', gender:Gender.MALE, sal:1450000, join:new Date('2020-10-15'), loc:'Kolkata', mode:WorkMode.HYBRID },
-    { fn:'Usha', ln:'Krishnamurthy', dept:'Finance', desig:'Financial Analyst', band:'P2', jobAreaId:F, jcId:jcFPA.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1100000, join:new Date('2022-02-01'), loc:'Chennai', mode:WorkMode.HYBRID },
-    { fn:'Prakash', ln:'Iyer', dept:'Finance', desig:'Senior Financial Analyst', band:'P2', jobAreaId:F, jcId:jcFPA.id, gradeCode:'P2-2', gender:Gender.MALE, sal:1700000, join:new Date('2019-09-01'), loc:'Mumbai', mode:WorkMode.ONSITE },
-    { fn:'Sunanda', ln:'Bhattacharya', dept:'Finance', desig:'Financial Analyst', band:'P2', jobAreaId:F, jcId:jcFPA.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1300000, join:new Date('2021-08-01'), loc:'Mumbai', mode:WorkMode.HYBRID },
+    { fn:'Chetan', ln:'Shah', dept:'Finance', desig:'Senior Financial Analyst', band:'P2', jobAreaId:F, jcId:jcFPA.id, gradeCode:'P2-2', gender:Gender.MALE, sal:1600000, join:new Date('2020-05-01'), loc:'Mumbai', mode:WorkMode.ONSITE, crit:C2 },
+    { fn:'Ranjana', ln:'Pillai', dept:'Finance', desig:'Financial Analyst', band:'P2', jobAreaId:F, jcId:jcFPA.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1200000, join:new Date('2021-03-15'), loc:'Mumbai', mode:WorkMode.HYBRID, crit:C3 },
+    { fn:'Mithun', ln:'Roy', dept:'Finance', desig:'Financial Analyst', band:'P2', jobAreaId:F, jcId:jcFPA.id, gradeCode:'P2-1', gender:Gender.MALE, sal:1450000, join:new Date('2020-10-15'), loc:'Kolkata', mode:WorkMode.HYBRID, crit:C3 },
+    { fn:'Usha', ln:'Krishnamurthy', dept:'Finance', desig:'Financial Analyst', band:'P2', jobAreaId:F, jcId:jcFPA.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1100000, join:new Date('2022-02-01'), loc:'Chennai', mode:WorkMode.HYBRID, crit:C4 },
+    { fn:'Prakash', ln:'Iyer', dept:'Finance', desig:'Senior Financial Analyst', band:'P2', jobAreaId:F, jcId:jcFPA.id, gradeCode:'P2-2', gender:Gender.MALE, sal:1700000, join:new Date('2019-09-01'), loc:'Mumbai', mode:WorkMode.ONSITE, crit:C1 },
+    { fn:'Sunanda', ln:'Bhattacharya', dept:'Finance', desig:'Financial Analyst', band:'P2', jobAreaId:F, jcId:jcFPA.id, gradeCode:'P2-1', gender:Gender.FEMALE, sal:1300000, join:new Date('2021-08-01'), loc:'Mumbai', mode:WorkMode.HYBRID, crit:C3 },
     // BELOW BAND MIN Finance P2 (min=1000000) — pay anomaly
-    { fn:'Alok', ln:'Chatterjee', dept:'Finance', desig:'Financial Analyst', band:'P2', jobAreaId:F, jcId:jcFPA.id, gradeCode:'P2-1', gender:Gender.MALE, sal:850000, join:new Date('2024-02-01'), loc:'Kolkata', mode:WorkMode.HYBRID },
+    { fn:'Alok', ln:'Chatterjee', dept:'Finance', desig:'Financial Analyst', band:'P2', jobAreaId:F, jcId:jcFPA.id, gradeCode:'P2-1', gender:Gender.MALE, sal:850000, join:new Date('2024-02-01'), loc:'Kolkata', mode:WorkMode.HYBRID, crit:C4 },
 
     // ── Operations (10) ──
-    { fn:'Pradeep', ln:'Nair', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.MALE, sal:900000, join:new Date('2021-09-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Swati', ln:'Lad', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:750000, join:new Date('2022-04-01'), loc:'Pune', mode:WorkMode.HYBRID },
-    { fn:'Ganesh', ln:'Hegde', dept:'Operations', desig:'Senior Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-2', gender:Gender.MALE, sal:1050000, join:new Date('2020-07-01'), loc:'Bangalore', mode:WorkMode.ONSITE },
-    { fn:'Roshni', ln:'Naik', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:700000, join:new Date('2022-08-01'), loc:'Goa', mode:WorkMode.REMOTE },
-    { fn:'Umesh', ln:'Joshi', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.MALE, sal:820000, join:new Date('2022-02-15'), loc:'Bangalore', mode:WorkMode.HYBRID },
-    { fn:'Savita', ln:'Deshpande', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:680000, join:new Date('2023-01-01'), loc:'Pune', mode:WorkMode.HYBRID },
-    { fn:'Nilesh', ln:'Pawar', dept:'Operations', desig:'Senior Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-2', gender:Gender.MALE, sal:1100000, join:new Date('2020-03-01'), loc:'Nashik', mode:WorkMode.ONSITE },
-    { fn:'Varsha', ln:'Gawde', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:720000, join:new Date('2023-05-01'), loc:'Pune', mode:WorkMode.HYBRID },
-    { fn:'Hemant', ln:'Thakkar', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.MALE, sal:870000, join:new Date('2022-10-01'), loc:'Ahmedabad', mode:WorkMode.HYBRID },
-    { fn:'Madhuri', ln:'Kale', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:760000, join:new Date('2023-02-01'), loc:'Bangalore', mode:WorkMode.HYBRID },
+    { fn:'Pradeep', ln:'Nair', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.MALE, sal:900000, join:new Date('2021-09-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C3 },
+    { fn:'Swati', ln:'Lad', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:750000, join:new Date('2022-04-01'), loc:'Pune', mode:WorkMode.HYBRID, crit:C4 },
+    { fn:'Ganesh', ln:'Hegde', dept:'Operations', desig:'Senior Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-2', gender:Gender.MALE, sal:1050000, join:new Date('2020-07-01'), loc:'Bangalore', mode:WorkMode.ONSITE, crit:C2 },
+    { fn:'Roshni', ln:'Naik', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:700000, join:new Date('2022-08-01'), loc:'Goa', mode:WorkMode.REMOTE, crit:C4 },
+    { fn:'Umesh', ln:'Joshi', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.MALE, sal:820000, join:new Date('2022-02-15'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C3 },
+    { fn:'Savita', ln:'Deshpande', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:680000, join:new Date('2023-01-01'), loc:'Pune', mode:WorkMode.HYBRID, crit:C4 },
+    { fn:'Nilesh', ln:'Pawar', dept:'Operations', desig:'Senior Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-2', gender:Gender.MALE, sal:1100000, join:new Date('2020-03-01'), loc:'Nashik', mode:WorkMode.ONSITE, crit:C3 },
+    { fn:'Varsha', ln:'Gawde', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:720000, join:new Date('2023-05-01'), loc:'Pune', mode:WorkMode.HYBRID, crit:C4 },
+    { fn:'Hemant', ln:'Thakkar', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.MALE, sal:870000, join:new Date('2022-10-01'), loc:'Ahmedabad', mode:WorkMode.HYBRID, crit:C3 },
+    { fn:'Madhuri', ln:'Kale', dept:'Operations', desig:'Business Analyst', band:'P1', jobAreaId:O, jcId:jcBizOps.id, gradeCode:'P1-1', gender:Gender.FEMALE, sal:760000, join:new Date('2023-02-01'), loc:'Bangalore', mode:WorkMode.HYBRID, crit:C4 },
   ];
 
   const employees: any[] = [];
@@ -384,11 +402,11 @@ async function main() {
 
   // ─── RSU Grants ────────────────────────────────────────────────────────────
   const today = new Date();
-  const rsuEmps = employees.filter(e => ['P2', 'P3', 'P4'].includes(e.band));
+  const rsuEmps = employees.filter(e => ['P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'].includes(e.band));
 
   for (const emp of rsuEmps.slice(0, 28)) {
-    const grantDate = emp.band === 'P4' ? new Date('2022-01-01') : emp.band === 'P3' ? new Date('2022-07-01') : new Date('2023-01-01');
-    const totalUnits = emp.band === 'P4' ? 1200 : emp.band === 'P3' ? 600 : 300;
+    const grantDate = ['M1','M2','D0','D1','D2'].includes(emp.band) ? new Date('2022-01-01') : emp.band === 'P3' ? new Date('2022-07-01') : new Date('2023-01-01');
+    const totalUnits = emp.band === 'M2' ? 2000 : emp.band === 'M1' ? 1200 : emp.band === 'P3' ? 600 : 300;
 
     const grant = await prisma.rsuGrant.create({
       data: { employeeId: emp.id, grantDate, totalUnits, vestedUnits: 0, vestingScheduleMonths: 48, cliffMonths: 12, vestingPercent: 25, priceAtGrant: 500, currentPrice: 750, status: RsuStatus.ACTIVE },

@@ -65,7 +65,7 @@ export interface SocketRsuVestingPayload {
 }
 
 // ─── Band Order (single source of truth for backend) ─────────
-export const BAND_ORDER = ['A1', 'A2', 'P1', 'P2', 'P3', 'P4'] as const;
+export const BAND_ORDER = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'] as const;
 export type BandCode = typeof BAND_ORDER[number];
 
 // ─── Socket Event Names ───────────────────────────────────────

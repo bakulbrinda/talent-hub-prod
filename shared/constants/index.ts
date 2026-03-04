@@ -6,16 +6,20 @@ import type { BandCode, InsightType, NotificationType } from '../types/index';
 
 // ─── Band Configuration ───────────────────────────────────────
 export const BANDS: { code: BandCode; label: string; level: number; isEligibleForRSU: boolean }[] = [
-  { code: 'A1', label: 'Associate Level 1', level: 1, isEligibleForRSU: false },
-  { code: 'A2', label: 'Associate Level 2', level: 2, isEligibleForRSU: false },
-  { code: 'P1', label: 'Professional Level 1', level: 3, isEligibleForRSU: false },
-  { code: 'P2', label: 'Professional Level 2', level: 4, isEligibleForRSU: true },
-  { code: 'P3', label: 'Professional Level 3', level: 5, isEligibleForRSU: true },
-  { code: 'P4', label: 'Professional Level 4', level: 6, isEligibleForRSU: true },
+  { code: 'A1', label: 'Associate Level 1',      level: 1,  isEligibleForRSU: false },
+  { code: 'A2', label: 'Associate Level 2',      level: 2,  isEligibleForRSU: false },
+  { code: 'P1', label: 'Professional Level 1',   level: 3,  isEligibleForRSU: false },
+  { code: 'P2', label: 'Professional Level 2',   level: 4,  isEligibleForRSU: true  },
+  { code: 'P3', label: 'Professional Level 3',   level: 5,  isEligibleForRSU: true  },
+  { code: 'M1', label: 'Manager Level 1',        level: 6,  isEligibleForRSU: true  },
+  { code: 'M2', label: 'Manager Level 2',        level: 7,  isEligibleForRSU: true  },
+  { code: 'D0', label: 'Director Level 0',       level: 8,  isEligibleForRSU: true  },
+  { code: 'D1', label: 'Director Level 1',       level: 9,  isEligibleForRSU: true  },
+  { code: 'D2', label: 'Director Level 2',       level: 10, isEligibleForRSU: true  },
 ];
 
 export const BAND_LEVELS: Record<BandCode, number> = {
-  A1: 1, A2: 2, P1: 3, P2: 4, P3: 5, P4: 6,
+  A1: 1, A2: 2, P1: 3, P2: 4, P3: 5, M1: 6, M2: 7, D0: 8, D1: 9, D2: 10,
 };
 
 export const BAND_COLORS: Record<BandCode, string> = {
@@ -24,7 +28,11 @@ export const BAND_COLORS: Record<BandCode, string> = {
   P1: '#6366f1',
   P2: '#8b5cf6',
   P3: '#a855f7',
-  P4: '#d946ef',
+  M1: '#ec4899',
+  M2: '#f43f5e',
+  D0: '#f97316',
+  D1: '#ef4444',
+  D2: '#dc2626',
 };
 
 // ─── Compa-Ratio Zones ────────────────────────────────────────
@@ -48,10 +56,13 @@ export const RSU_VESTING_MONTHS = [12, 24, 36, 48]; // cliff at 12, then yearly
 export const RSU_VESTING_PERCENT_PER_EVENT = 25; // 25% per event
 
 export const RSU_GRANT_TIERS: Record<string, { min: number; max: number }> = {
-  P2: { min: 50, max: 75 },
-  P3: { min: 75, max: 100 },
-  P4: { min: 100, max: 150 },
-  LEADERSHIP: { min: 150, max: 300 },
+  P2: { min: 50,  max: 75  },
+  P3: { min: 75,  max: 100 },
+  M1: { min: 100, max: 150 },
+  M2: { min: 150, max: 200 },
+  D0: { min: 200, max: 300 },
+  D1: { min: 300, max: 500 },
+  D2: { min: 500, max: 800 },
 };
 
 export const RSU_ELIGIBILITY = {

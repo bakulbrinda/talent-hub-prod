@@ -245,6 +245,7 @@ model Employee {
   compaRatio          Decimal? @db.Decimal(8, 2)
   payRangePenetration Decimal? @db.Decimal(8, 2)
   attritionRiskScore  Decimal? @db.Decimal(5, 2)
+  criticality         Criticality?
   timeInCurrentGrade  Int?
 
   // Meta
@@ -295,6 +296,13 @@ enum WorkMode {
   REMOTE
   HYBRID
   ONSITE
+}
+
+enum Criticality {
+  C1  // Critical + Irreplaceable (highest increment)
+  C2  // Non-Critical + Irreplaceable
+  C3  // Critical + Replaceable
+  C4  // Non-Critical + Replaceable (lowest increment)
 }
 
 // ─── Salary Bands & Benchmarks ─────────────────────────────────
