@@ -19,6 +19,7 @@ model User {
   updatedAt     DateTime       @updatedAt
   refreshTokens RefreshToken[]
   scenarios     Scenario[]
+  auditLogs     AuditLog[]
 
   @@map("users")
 }
@@ -34,9 +35,42 @@ model RefreshToken {
   @@map("refresh_tokens")
 }
 
+model UserInvite {
+  id          String    @id @default(uuid())
+  email       String    @unique
+  role        UserRole  @default(HR_MANAGER)
+  token       String    @unique
+  invitedById String
+  expiresAt   DateTime
+  usedAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([token])
+  @@index([email])
+  @@map("user_invites")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  action     String   // e.g. "EMPLOYEE_UPDATED", "SCENARIO_APPLIED"
+  entityType String?  // e.g. "Employee", "Scenario"
+  entityId   String?
+  metadata   Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@map("audit_logs")
+}
+
 enum UserRole {
-  ADMIN
-  VIEWER
+  ADMIN       // Full access: manage users, apply scenarios, import data
+  HR_MANAGER  // Read + run scenarios + AI chat (cannot apply, cannot manage users)
+  VIEWER      // Read-only dashboard + AI chat
 }
 
 // ─── Job Architecture ──────────────────────────────────────────

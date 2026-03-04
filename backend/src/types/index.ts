@@ -1,6 +1,6 @@
 // Backend-local type definitions (extracted from shared/ to eliminate cross-package imports)
 
-export type UserRole = 'ADMIN' | 'VIEWER';
+export type UserRole = 'ADMIN' | 'HR_MANAGER' | 'VIEWER';
 
 export interface AuthUser {
   id: string;

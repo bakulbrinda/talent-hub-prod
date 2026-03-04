@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { authenticate } from '../middleware/authenticate';
+import { requireRole } from '../middleware/requireRole';
 import { importController } from '../controllers/import.controller';
 
 const router = Router();
@@ -27,7 +28,7 @@ const upload = multer({
 
 router.use(authenticate);
 
-router.post('/employees', upload.single('file'), importController.importEmployees);
+router.post('/employees', requireRole('ADMIN', 'HR_MANAGER'), upload.single('file'), importController.importEmployees);
 router.get('/template', importController.downloadTemplate);
 
 export default router;

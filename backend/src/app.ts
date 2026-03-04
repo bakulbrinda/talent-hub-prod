@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import compression from 'compression';
 import rateLimit from 'express-rate-limit';
+import helmet from 'helmet';
 import path from 'path';
 import fs from 'fs';
 import { errorHandler } from './middleware/errorHandler';
@@ -23,11 +24,21 @@ import exportRoutes from './routes/export.routes';
 import importRoutes from './routes/import.routes';
 import emailRoutes from './routes/email.routes';
 import aiChatRoutes from './routes/aiChat.routes';
+import aiReportRoutes from './routes/aiReport.routes';
+import usersRoutes from './routes/users.routes';
 
 const app = express();
 
 // Trust Cloudflare / reverse proxy (required for rate-limiter behind tunnels)
 app.set('trust proxy', 1);
+
+// ─── Security Headers (Helmet) ────────────────────────────────
+// In tunnel/dev mode we need to relax CSP so the Vite hot-reload
+// and Cloudflare scripts can load. In production tighten as needed.
+app.use(helmet({
+  contentSecurityPolicy: false, // Relaxed for tunnel + React SPA
+  crossOriginEmbedderPolicy: false,
+}));
 
 // ─── Security & Performance ───────────────────────────────────
 // When FRONTEND_URL is not set (tunnel / local dev), allow all origins.
@@ -82,6 +93,12 @@ app.get('/api/health', (_req, res) => {
 // ─── Routes ───────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);
 
+// Users + invite system — must be BEFORE /api catch-all (jobArchitecture) because
+// the invite validation and accept-invite endpoints are PUBLIC (no auth header).
+// jobArchitecture.routes.ts applies router.use(authenticate) globally which would
+// otherwise intercept and reject un-authenticated /api/users/* requests.
+app.use('/api/users', usersRoutes);
+
 // Job Architecture routes: /api/hierarchy, /api/job-areas, /api/bands, etc.
 app.use('/api', jobArchitectureRoutes);
 
@@ -103,6 +120,7 @@ app.use('/api/export', exportRoutes);
 app.use('/api/import', importRoutes);
 app.use('/api/email', emailRoutes);
 app.use('/api/ai/chat', aiChatRoutes);
+app.use('/api/ai/report', aiReportRoutes);
 
 // ─── 404 for unknown API routes ───────────────────────────────
 app.use('/api/*', (_req, res) => {

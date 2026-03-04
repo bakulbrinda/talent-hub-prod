@@ -4,6 +4,7 @@ import { Plus, Play, CheckCircle, Trash2, BarChart3, Sparkles, Loader2, RefreshC
 import ReactMarkdown from 'react-markdown';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
+import { ScenarioSuggester } from '../components/ScenarioSuggester';
 
 const scenarioApi = {
   getAll: async () => { const r = await api.get('/scenarios'); return r.data; },
@@ -125,6 +126,9 @@ export default function ScenarioModelerPage() {
         <h1 className="text-2xl font-bold text-foreground">Scenario Modeler</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Model compensation changes with what-if scenario analysis</p>
       </div>
+
+      {/* AI Scenario Suggester — creates DRAFT scenarios automatically */}
+      <ScenarioSuggester />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Left: Scenario List */}

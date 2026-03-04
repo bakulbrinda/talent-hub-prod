@@ -4,17 +4,20 @@ import type { Notification } from '@shared/types/index';
 interface NotificationState {
   notifications: Notification[];
   unreadCount: number;
+  criticalAlert: Notification | null;
 
   addNotification: (notification: Notification) => void;
   setNotifications: (notifications: Notification[], unreadCount: number) => void;
   markAsRead: (id: string) => void;
   markAllAsRead: () => void;
   setUnreadCount: (count: number) => void;
+  setCriticalAlert: (notification: Notification | null) => void;
 }
 
 export const useNotificationStore = create<NotificationState>((set) => ({
   notifications: [],
   unreadCount: 0,
+  criticalAlert: null,
 
   addNotification: (notification) =>
     set((state) => ({
@@ -40,4 +43,6 @@ export const useNotificationStore = create<NotificationState>((set) => ({
     })),
 
   setUnreadCount: (count) => set({ unreadCount: count }),
+
+  setCriticalAlert: (notification) => set({ criticalAlert: notification }),
 }));

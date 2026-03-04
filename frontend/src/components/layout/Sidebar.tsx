@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, BarChart3, Scale, Sparkles, Gift,
   TrendingUp, Award, Zap, FlaskConical, Bell, Settings,
-  ChevronDown, DollarSign, Layers, Building2,
+  ChevronDown, DollarSign, Layers, Building2, FileText,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useNotificationStore } from '../../store/notificationStore';
@@ -45,6 +45,7 @@ const NAV_GROUPS: NavGroup[] = [
       { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { path: '/ai-assistant', label: 'AI Assistant', icon: Sparkles },
       { path: '/ai-insights', label: 'AI Insights', icon: Sparkles },
+      { path: '/report', label: 'Leadership Report', icon: FileText },
       { path: '/notifications', label: 'Notifications', icon: Bell },
     ],
   },

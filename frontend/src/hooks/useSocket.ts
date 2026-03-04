@@ -9,7 +9,7 @@ import type { Notification } from '@shared/types/index';
 
 export function useSocket() {
   const { accessToken, isAuthenticated } = useAuthStore();
-  const { addNotification } = useNotificationStore();
+  const { addNotification, setCriticalAlert } = useNotificationStore();
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -35,6 +35,7 @@ export function useSocket() {
 
     socket.on('notification:critical', (notification: Notification) => {
       addNotification(notification);
+      setCriticalAlert(notification);
       toast.error(notification.title, {
         description: notification.message,
         duration: 10000,

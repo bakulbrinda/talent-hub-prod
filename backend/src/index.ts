@@ -5,6 +5,7 @@ import { initializeSocket } from './lib/socket';
 import { redisClient } from './lib/redis';
 import { prisma } from './lib/prisma';
 import logger from './lib/logger';
+import { runProactiveScan } from './services/aiScan';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -31,6 +32,22 @@ async function bootstrap() {
       logger.info(`📊 Environment: ${process.env.NODE_ENV || 'development'}`);
       logger.info(`🌐 Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
     });
+
+    // ─── Proactive AI Scan (Phase 4) ─────────────────────────
+    // Initial scan after 2 min — gives Neon DB time to stay alive after the
+    // first real API request wakes it, and gives Socket.io Redis adapter time
+    // to attach so critical notifications are delivered in real time.
+    // Subsequent scans every 1 hour.
+    const INITIAL_SCAN_DELAY_MS = 2 * 60 * 1000; // 2 minutes
+    const SCAN_INTERVAL_MS = 60 * 60 * 1000;      // 1 hour
+
+    setTimeout(() => {
+      runProactiveScan().catch(err => logger.error('[AI Scan] Initial scan error:', err));
+    }, INITIAL_SCAN_DELAY_MS);
+
+    setInterval(() => {
+      runProactiveScan().catch(err => logger.error('[AI Scan] Periodic scan error:', err));
+    }, SCAN_INTERVAL_MS);
 
     // ─── Graceful Shutdown ───────────────────────────────────
     const shutdown = async (signal: string) => {
