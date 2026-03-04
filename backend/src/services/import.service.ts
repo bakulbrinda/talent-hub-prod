@@ -24,8 +24,41 @@ export interface ImportRow {
   workMode?: string;
   workLocation?: string;
   employmentType?: string;
+  employmentStatus?: string;
   reportingManagerEmail?: string;
   costCenter?: string;
+  // Zoho Salary Breakdown
+  basicAnnual?: string;
+  basicMonthly?: string;
+  hra?: string;
+  hraMonthly?: string;
+  pfYearly?: string;
+  pfMonthly?: string;
+  lta?: string;
+  ltaMonthly?: string;
+  specialAllowance?: string;
+  monthlySpecialAllowance?: string;
+  subTotalA?: string;
+  subTotalAMonthly?: string;
+  monthlyGrossSalary?: string;
+  flexiTotalYearly?: string;
+  flexiTotalMonthly?: string;
+  retentionBonus?: string;
+  joiningBonus?: string;
+  incentives?: string;
+  // Zoho Revision Cycles (annual fixed salary at each revision point)
+  april2023?: string;
+  july2023?: string;
+  april2024?: string;
+  july2024?: string;
+  // Zoho Meta
+  nickName?: string;
+  refNo?: string;
+  remarks?: string;
+  addedBy?: string;
+  compensationDocument?: string;
+  presentAddress?: string;
+  dateOfExit?: string;
 }
 
 export interface ImportError {
@@ -135,10 +168,47 @@ const COLUMN_ALIASES: Record<string, keyof ImportRow | 'fullName'> = {
   // costCenter
   costcenter: 'costCenter', cc: 'costCenter', costcentre: 'costCenter',
   costcentrecode: 'costCenter', costcentercode: 'costCenter',
+
+  // ── Zoho People specific ──────────────────────────────────────
+  // Revision cycles (Zoho exports salary value at each revision point)
+  april2023: 'april2023', apr2023: 'april2023',
+  july2023: 'july2023',   jul2023: 'july2023',
+  april2024: 'april2024', apr2024: 'april2024',
+  july2024: 'july2024',   jul2024: 'july2024',
+
+  // Salary breakdown
+  basicannual: 'basicAnnual', annualbasic: 'basicAnnual', basictotal: 'basicAnnual',
+  basicmonthly: 'basicMonthly', monthlybasic: 'basicMonthly',
+  hra: 'hra', houserentallowance: 'hra',
+  hramonthly: 'hraMonthly', monthllyhra: 'hraMonthly',
+  pfyearly: 'pfYearly', pfannual: 'pfYearly', providentfundyearly: 'pfYearly',
+  pfmonthly: 'pfMonthly', monthlypf: 'pfMonthly', providentfundmonthly: 'pfMonthly',
+  lta: 'lta', leavetravel: 'lta', leavetravelallowance: 'lta',
+  ltamonthly: 'ltaMonthly', monthlylta: 'ltaMonthly',
+  specialallowance: 'specialAllowance', spl: 'specialAllowance',
+  monthlyspecialallowance: 'monthlySpecialAllowance',
+  subtotala: 'subTotalA', subtotalamonthly: 'subTotalAMonthly',
+  monthlygrosssalary: 'monthlyGrossSalary', monthlygross: 'monthlyGrossSalary',
+  flexitotalyearly: 'flexiTotalYearly', flexiyearly: 'flexiTotalYearly',
+  flexitotalmonthly: 'flexiTotalMonthly', fleximonthly: 'flexiTotalMonthly',
+  retentionbonus: 'retentionBonus', retention: 'retentionBonus',
+  joiningbonus: 'joiningBonus', joinbonus: 'joiningBonus',
+  incentives: 'incentives',
+
+  // Zoho meta columns
+  nickname: 'nickName', nicknames: 'nickName',
+  refnoyearmonthempno: 'refNo', referenceno: 'refNo',
+  cityofresidence: 'workLocation', residencecity: 'workLocation',
+  presentaddress: 'presentAddress', address: 'presentAddress',
+  compensationdocument: 'compensationDocument',
+  addedby: 'addedBy',
+  remarks: 'remarks', remark: 'remarks',
+  dateofexit: 'dateOfExit', exitdate: 'dateOfExit', dateofleaving: 'dateOfExit',
+  employmentstatus: 'employmentStatus',
 };
 
 function normKey(raw: string): string {
-  return String(raw).toLowerCase().replace(/[\s_\-\.\/\\]/g, '').trim();
+  return String(raw).toLowerCase().replace(/[^a-z0-9]/g, '').trim();
 }
 
 function normaliseHeaders(rows: Record<string, any>[]): { rows: ImportRow[]; detected: string[] } {
@@ -229,16 +299,28 @@ function parseDate(val: any): string {
 }
 
 function normaliseValues(row: ImportRow): ImportRow {
-  const r = { ...row };
+  const r = { ...row } as any;
   if (r.gender) r.gender = GENDER_MAP[normKey(r.gender)] || r.gender.toUpperCase();
   if (r.workMode) r.workMode = WORKMODE_MAP[normKey(r.workMode)] || r.workMode.toUpperCase();
   if (r.employmentType) r.employmentType = EMPTYPE_MAP[normKey(r.employmentType)] || r.employmentType.toUpperCase();
   if (r.band) r.band = r.band.toString().toUpperCase().trim();
   if (r.dateOfJoining) r.dateOfJoining = parseDate(r.dateOfJoining);
-  if (r.annualFixed) r.annualFixed = String(parseSalary(r.annualFixed) || r.annualFixed);
-  if (r.variablePay) r.variablePay = String(parseSalary(r.variablePay) || r.variablePay);
-  if (r.annualCtc) r.annualCtc = String(parseSalary(r.annualCtc) || r.annualCtc);
-  return r;
+  // Salary fields
+  const SALARY_FIELDS = [
+    'annualFixed','variablePay','annualCtc',
+    'basicAnnual','basicMonthly','hra','hraMonthly','pfYearly','pfMonthly',
+    'lta','ltaMonthly','specialAllowance','monthlySpecialAllowance',
+    'subTotalA','subTotalAMonthly','monthlyGrossSalary',
+    'flexiTotalYearly','flexiTotalMonthly','retentionBonus','joiningBonus','incentives',
+    'april2023','july2023','april2024','july2024',
+  ];
+  for (const field of SALARY_FIELDS) {
+    if (r[field]) {
+      const parsed = parseSalary(r[field]);
+      r[field] = parsed > 0 ? String(parsed) : r[field];
+    }
+  }
+  return r as ImportRow;
 }
 
 // ─── Auto-Repair: fill in missing required fields ─────────────
@@ -253,8 +335,14 @@ function autoRepairRow(row: ImportRow, rowIndex: number): ImportRow {
     // scan raw (non-canonical) keys for something that looks like a name
     for (const [k, v] of Object.entries(r)) {
       if (['employeeId','email','department','designation','band','grade','annualFixed',
-           'variablePay','annualCtc','workMode','workLocation','employmentType',
-           'reportingManagerEmail','costCenter','dateOfJoining','gender'].includes(k)) continue;
+           'variablePay','annualCtc','workMode','workLocation','employmentType','employmentStatus',
+           'reportingManagerEmail','costCenter','dateOfJoining','gender',
+           'basicAnnual','basicMonthly','hra','hraMonthly','pfYearly','pfMonthly',
+           'lta','ltaMonthly','specialAllowance','monthlySpecialAllowance',
+           'subTotalA','subTotalAMonthly','monthlyGrossSalary','flexiTotalYearly','flexiTotalMonthly',
+           'retentionBonus','joiningBonus','incentives',
+           'april2023','july2023','april2024','july2024',
+           'nickName','refNo','remarks','addedBy','compensationDocument','presentAddress','dateOfExit'].includes(k)) continue;
       if (typeof v === 'string' && v.trim() && /^[a-zA-Z\s]+$/.test(v.trim())) {
         const parts = v.trim().split(/\s+/);
         if (!r.firstName) r.firstName = parts[0];
@@ -330,6 +418,55 @@ function autoRepairRow(row: ImportRow, rowIndex: number): ImportRow {
   return r as ImportRow;
 }
 
+// ─── Derive PerformanceRating records from Zoho revision cycles ──
+// Each revision cycle column holds the annual fixed salary at that point.
+// We compute the increment % between consecutive cycles and map it to a rating.
+function ratingFromIncrement(pct: number): { rating: number; label: string } {
+  if (pct >= 15) return { rating: 5.0, label: 'Outstanding' };
+  if (pct >= 10) return { rating: 4.0, label: 'Exceeds Expectations' };
+  if (pct >=  5) return { rating: 3.0, label: 'Meets Expectations' };
+  if (pct >   0) return { rating: 2.5, label: 'Below Expectations' };
+  return { rating: 2.0, label: 'Needs Improvement' };
+}
+
+async function createRatingsFromRevisions(employeeId: string, row: ImportRow): Promise<void> {
+  const allCycles = [
+    { cycle: 'April 2023', value: row.april2023 ? parseSalary(row.april2023) : null },
+    { cycle: 'July 2023',  value: row.july2023  ? parseSalary(row.july2023)  : null },
+    { cycle: 'April 2024', value: row.april2024 ? parseSalary(row.april2024) : null },
+    { cycle: 'July 2024',  value: row.july2024  ? parseSalary(row.july2024)  : null },
+  ];
+  const cycles = allCycles
+    .filter(c => c.value !== null && (c.value as number) > 0)
+    .map(c => ({ cycle: c.cycle, value: c.value as number }));
+
+  if (cycles.length === 0) return;
+
+  for (let i = 0; i < cycles.length; i++) {
+    const curr = cycles[i];
+    const prev = cycles[i - 1];
+    let ratingData: { rating: number; label: string };
+
+    if (prev) {
+      const incrementPct = ((curr.value - prev.value) / prev.value) * 100;
+      ratingData = ratingFromIncrement(incrementPct);
+    } else {
+      // First cycle — no prior to compare; use a neutral default
+      ratingData = { rating: 3.0, label: 'Meets Expectations' };
+    }
+
+    try {
+      await prisma.performanceRating.upsert({
+        where: { employeeId_cycle: { employeeId, cycle: curr.cycle } },
+        update: { rating: ratingData.rating, ratingLabel: ratingData.label },
+        create: { employeeId, cycle: curr.cycle, rating: ratingData.rating, ratingLabel: ratingData.label },
+      });
+    } catch (err) {
+      logger.warn(`Could not create performance rating for ${employeeId} cycle ${curr.cycle}:`, err);
+    }
+  }
+}
+
 export const importService = {
   parseFile: (buffer: Buffer, mimetype: string): { rows: ImportRow[]; detectedColumns: string[] } => {
     try {
@@ -363,13 +500,26 @@ export const importService = {
 
   buildEmployeeData: async (row: ImportRow) => {
     const annualFixed = parseSalary(row.annualFixed);
-    const basic = annualFixed * 0.35;
-    const hra = annualFixed * 0.20;
-    const lta = annualFixed * 0.05;
-    const pf = basic * 0.12;
-    const specialAllowance = annualFixed - basic - hra - lta;
+    // Use Zoho-provided breakdown values when available; fallback to standard ratios
+    const basic = row.basicAnnual ? parseSalary(row.basicAnnual) : annualFixed * 0.35;
+    const hra = row.hra ? parseSalary(row.hra) : annualFixed * 0.20;
+    const lta = row.lta ? parseSalary(row.lta) : annualFixed * 0.05;
+    const pf = row.pfYearly ? parseSalary(row.pfYearly) : basic * 0.12;
+    const specialAllowance = row.specialAllowance ? parseSalary(row.specialAllowance) : annualFixed - basic - hra - lta;
     const variablePay = row.variablePay ? parseSalary(row.variablePay) : annualFixed * 0.10;
     const annualCtc = row.annualCtc ? parseSalary(row.annualCtc) : annualFixed + variablePay + pf;
+    const retentionBonus = row.retentionBonus ? parseSalary(row.retentionBonus) : 0;
+    const joiningBonus = row.joiningBonus ? parseSalary(row.joiningBonus) : 0;
+    const incentivesVal = row.incentives ? parseSalary(row.incentives) : 0;
+    const flexiYearly = row.flexiTotalYearly ? parseSalary(row.flexiTotalYearly) : 0;
+    const subTotalA = row.subTotalA ? parseSalary(row.subTotalA) : annualFixed;
+    const monthlyGross = row.monthlyGrossSalary ? parseSalary(row.monthlyGrossSalary) : annualFixed / 12;
+
+    // Revision cycle salary values
+    const april2023 = row.april2023 ? parseSalary(row.april2023) : null;
+    const july2023  = row.july2023  ? parseSalary(row.july2023)  : null;
+    const april2024 = row.april2024 ? parseSalary(row.april2024) : null;
+    const july2024  = row.july2024  ? parseSalary(row.july2024)  : null;
 
     let reportingManagerId: string | null = null;
     if (row.reportingManagerEmail?.trim()) {
@@ -404,14 +554,25 @@ export const importService = {
       pfMonthly: pf / 12,
       specialAllowance,
       monthlySpecialAllowance: specialAllowance / 12,
-      flexiTotalYearly: 0,
-      flexiTotalMonthly: 0,
-      subTotalA: annualFixed,
-      subTotalAMonthly: annualFixed / 12,
-      monthlyGrossSalary: annualFixed / 12,
-      incentives: 0,
-      joiningBonus: 0,
-      retentionBonus: 0,
+      flexiTotalYearly: flexiYearly,
+      flexiTotalMonthly: flexiYearly / 12,
+      subTotalA,
+      subTotalAMonthly: subTotalA / 12,
+      monthlyGrossSalary: monthlyGross,
+      incentives: incentivesVal,
+      joiningBonus,
+      retentionBonus,
+      // Revision cycles
+      ...(april2023 !== null && { april2023 }),
+      ...(july2023  !== null && { july2023 }),
+      ...(april2024 !== null && { april2024 }),
+      ...(july2024  !== null && { july2024 }),
+      // Meta
+      ...(row.nickName            && { nickName: row.nickName.trim() }),
+      ...(row.refNo               && { refNo: row.refNo.trim() }),
+      ...(row.remarks             && { remarks: row.remarks.trim() }),
+      ...(row.addedBy             && { addedBy: row.addedBy.trim() }),
+      ...(row.compensationDocument && { compensationDocument: row.compensationDocument.trim() }),
       workMode: (row.workMode?.trim().toUpperCase() || 'HYBRID') as WorkMode,
       workLocation: row.workLocation?.trim() || null,
       employmentType: (row.employmentType?.trim().toUpperCase() || 'FULL_TIME') as EmploymentType,
@@ -529,12 +690,23 @@ export const importService = {
 
         try {
           const data = await importService.buildEmployeeData(row);
-          const employee = await prisma.employee.upsert({
-            where: { employeeId: data.employeeId },
-            update: { ...data },
-            create: { ...data },
-          });
+          // Resolve existing record: try by employeeId first, then by email.
+          // This prevents "Unique constraint on email" failures when the CSV
+          // contains an employee whose email is already in the DB under a
+          // different employeeId (e.g. leftover seed data).
+          let existingId: string | null = null;
+          const byEmpId = await prisma.employee.findUnique({ where: { employeeId: data.employeeId }, select: { id: true } });
+          if (byEmpId) {
+            existingId = byEmpId.id;
+          } else {
+            const byEmail = await prisma.employee.findUnique({ where: { email: data.email }, select: { id: true } });
+            if (byEmail) existingId = byEmail.id;
+          }
+          const employee = existingId
+            ? await prisma.employee.update({ where: { id: existingId }, data })
+            : await prisma.employee.create({ data });
           await employeeService.computeAndUpdateDerivedFields(employee.id);
+          await createRatingsFromRevisions(employee.id, row);
           importedIds.push(employee.id);
           imported++;
         } catch (err: any) {
@@ -563,14 +735,19 @@ export const importService = {
   },
 
   generateTemplate: (): string => {
+    // Zoho People Compensation Details View format
     const headers = [
-      'employeeId', 'firstName', 'lastName', 'email',
-      'department', 'designation', 'dateOfJoining', 'gender',
-      'band', 'grade', 'annualFixed', 'variablePay', 'annualCtc',
-      'workMode', 'workLocation', 'employmentType', 'reportingManagerEmail', 'costCenter',
+      'Employee ID', 'First Name', 'Last Name', 'Email address',
+      'Department', 'Designation', 'Reporting Manager', 'Date of Joining',
+      'Employment Type', 'Employment Status', 'Gender', 'City of residence',
+      'Annual Fixed', 'Variable Pay', 'Annual CTC',
+      'April 2023', 'July 2023', 'April 2024', 'July 2024',
+      'Basic Annual', 'HRA', 'PF Yearly', 'Special Allowance',
+      'Monthly Gross Salary', 'Retention Bonus', 'Joining Bonus', 'Incentives',
+      'Band', 'Grade',
     ];
-    const r1 = ['EMP001','Priya','Sharma','priya.sharma@company.com','Engineering','Software Engineer','2024-01-15','FEMALE','P1','P1-L1','1200000','120000','1380000','HYBRID','Bangalore','FULL_TIME','manager@company.com','CC-ENG'];
-    const r2 = ['EMP002','Rahul','Verma','rahul.verma@company.com','Sales','Account Executive','2023-06-01','MALE','A2','A2-L1','800000','200000','1050000','ONSITE','Mumbai','FULL_TIME','',''];
+    const r1 = ['EMP001','Priya','Sharma','priya.sharma@company.com','Engineering','Software Engineer II','','2022-01-15','FULL_TIME','ACTIVE','FEMALE','Bangalore','1200000','120000','1380000','900000','960000','1100000','1200000','420000','240000','50400','189600','100000','0','0','0','P1','P1-1'];
+    const r2 = ['EMP002','Rahul','Verma','rahul.verma@company.com','Sales','Account Executive','','2023-06-01','FULL_TIME','ACTIVE','MALE','Mumbai','800000','80000','928000','','','750000','800000','280000','160000','33600','126400','66667','0','0','0','A2','A2-1'];
     return [headers.join(','), r1.join(','), r2.join(',')].join('\n');
   },
 };

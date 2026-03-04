@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   Search, Filter, Users, TrendingUp, TrendingDown, Minus,
-  UserPlus, Upload, Pencil, AlertCircle, RefreshCw, FileSpreadsheet, Sparkles
+  UserPlus, Upload, Pencil, AlertCircle, RefreshCw, FileSpreadsheet, Sparkles, Trash2
 } from 'lucide-react';
 import { employeeService, EmployeeFilters } from '../services/employee.service';
 import { queryKeys } from '../lib/queryClient';
 import { cn, formatINR, getInitials, getBandColor } from '../lib/utils';
+import { api } from '../lib/api';
 import AddEmployeeModal from '../components/employees/AddEmployeeModal';
 import ImportEmployeesModal from '../components/employees/ImportEmployeesModal';
 
@@ -38,7 +39,15 @@ export default function EmployeeDirectoryPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [editEmployee, setEditEmployee] = useState<any | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.delete(`/employees/${id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.employees.all({}) });
+    },
+  });
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: queryKeys.employees.all(filters as Record<string, unknown>),
@@ -276,13 +285,45 @@ export default function EmployeeDirectoryPage() {
                       </span>
                     </td>
                     <td className="px-4 py-3">
-                      <button
-                        onClick={() => { setEditEmployee(emp); setShowAdd(true); }}
-                        className="opacity-0 group-hover:opacity-100 p-1.5 rounded-lg hover:bg-accent transition-all text-muted-foreground hover:text-foreground"
-                        title="Edit employee"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-all">
+                        <button
+                          onClick={() => { setEditEmployee(emp); setShowAdd(true); }}
+                          className="p-1.5 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground"
+                          title="Edit employee"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        {deletingId === emp.id ? (
+                          <>
+                            <button
+                              onClick={() => {
+                                deleteMutation.mutate(emp.id);
+                                setDeletingId(null);
+                              }}
+                              className="p-1.5 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-200 dark:hover:bg-red-900/50 transition-colors text-xs font-medium"
+                              title="Confirm delete"
+                            >
+                              ✓
+                            </button>
+                            <button
+                              onClick={() => setDeletingId(null)}
+                              className="p-1.5 rounded-lg hover:bg-accent transition-colors text-muted-foreground hover:text-foreground text-xs"
+                              title="Cancel"
+                            >
+                              ✕
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={() => setDeletingId(emp.id)}
+                            className="p-1.5 rounded-lg hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors text-muted-foreground hover:text-red-600 dark:hover:text-red-400"
+                            title="Delete employee"
+                            disabled={deleteMutation.isPending}
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))

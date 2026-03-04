@@ -20,8 +20,12 @@ export const useLogin = () => {
       toast.success(`Welcome back, ${data.user.name}!`);
       navigate('/dashboard');
     },
-    onError: () => {
-      toast.error('Invalid email or password');
+    onError: (error: any) => {
+      if (error?.response?.status === 429) {
+        toast.error('Too many requests — please wait a moment and try again');
+      } else {
+        toast.error('Invalid email or password');
+      }
     },
   });
 };

@@ -27,19 +27,14 @@ export function useSocket() {
 
     socket.on('notification:new', (notification: Notification) => {
       addNotification(notification);
-      toast.info(notification.title, {
-        description: notification.message,
-        duration: 5000,
-      });
+      // No toast — notifications are visible in the badge + panel.
+      // Toasting every AI scan finding (runs on every backend startup) is disruptive.
     });
 
     socket.on('notification:critical', (notification: Notification) => {
       addNotification(notification);
       setCriticalAlert(notification);
-      toast.error(notification.title, {
-        description: notification.message,
-        duration: 10000,
-      });
+      // No toast — the red banner in AppShell already surfaces CRITICAL alerts prominently.
     });
 
     socket.on('pay:anomaly', (payload: { employee: { firstName: string; lastName: string }; band: string; delta: number }) => {

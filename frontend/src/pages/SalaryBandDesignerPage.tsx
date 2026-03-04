@@ -33,7 +33,6 @@ function SalaryBandTooltip({ active, payload }: any) {
           { label: 'Min', val: d.min, color: 'text-red-600' },
           { label: 'Mid', val: d.mid, color: 'text-blue-600 font-bold' },
           { label: 'Max', val: d.max, color: 'text-green-600' },
-          d.p50 && { label: 'P50 Market', val: d.p50, color: 'text-emerald-500' },
         ].filter(Boolean).map((item: any) => (
           <div key={item.label} className="flex justify-between gap-4">
             <span className="text-muted-foreground">{item.label}</span>
@@ -127,21 +126,7 @@ export default function SalaryBandDesignerPage() {
     bandMap.set(code, { band: code, min, mid, max, rangeBase: min, rangeSize: max - min });
   }
 
-  // Overlay benchmark data
-  for (const bm of benchmarks) {
-    const code = bm.band?.code;
-    if (!code || !bandMap.has(code)) continue;
-    const entry = bandMap.get(code)!;
-    if (!entry.p25) entry.p25 = Number(bm.p25);
-    if (!entry.p50) entry.p50 = Number(bm.p50);
-    if (!entry.p75) entry.p75 = Number(bm.p75);
-    if (!entry.p90) entry.p90 = Number(bm.p90);
-  }
-
   const chartData = BAND_ORDER.filter(c => bandMap.has(c)).map(c => bandMap.get(c)!);
-  const hasP50 = chartData.some(d => d.p50);
-  const hasP75 = chartData.some(d => d.p75);
-  const hasP25 = chartData.some(d => d.p25);
 
   const formatYAxis = (val: number) => `₹${(val / 100000).toFixed(0)}L`;
 
@@ -151,7 +136,7 @@ export default function SalaryBandDesignerPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Salary Band Designer</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Design and visualize compensation ranges with market benchmarks
+            Design and visualize your organisation's compensation ranges
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -225,18 +210,6 @@ export default function SalaryBandDesignerPage() {
               <div className="w-8 border-t-2 border-blue-500" />
               <span className="text-muted-foreground">Midpoint</span>
             </div>
-            {hasP50 && (
-              <div className="flex items-center gap-1.5">
-                <div className="w-8 border-t-2 border-emerald-500 border-dashed" />
-                <span className="text-muted-foreground">P50 Market</span>
-              </div>
-            )}
-            {hasP75 && (
-              <div className="flex items-center gap-1.5">
-                <div className="w-8 border-t-2 border-amber-500 border-dashed" />
-                <span className="text-muted-foreground">P75 Market</span>
-              </div>
-            )}
           </div>
 
           {isLoading ? (
@@ -261,10 +234,6 @@ export default function SalaryBandDesignerPage() {
                 {/* Midpoint */}
                 <Line type="monotone" dataKey="mid" name="Midpoint" stroke="hsl(221 83% 53%)" strokeWidth={2.5} dot={{ r: 5, fill: 'hsl(221 83% 53%)', strokeWidth: 2, stroke: '#fff' }} />
 
-                {/* Market benchmarks */}
-                {hasP25 && <Line type="monotone" dataKey="p25" name="P25 Market" stroke="#94a3b8" strokeWidth={1.5} strokeDasharray="4 4" dot={{ r: 3 }} />}
-                {hasP50 && <Line type="monotone" dataKey="p50" name="P50 Market" stroke="#10b981" strokeWidth={2} strokeDasharray="6 3" dot={{ r: 4 }} />}
-                {hasP75 && <Line type="monotone" dataKey="p75" name="P75 Market" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="6 3" dot={{ r: 3 }} />}
               </ComposedChart>
             </ResponsiveContainer>
           )}
@@ -279,7 +248,6 @@ export default function SalaryBandDesignerPage() {
                     <th className="text-right pb-2 px-1">Min</th>
                     <th className="text-right pb-2 px-1">Mid</th>
                     <th className="text-right pb-2 px-1">Max</th>
-                    <th className="text-right pb-2 px-1">P50 Market</th>
                     <th className="text-right pb-2 px-1">Spread</th>
                     <th className="text-center pb-2 px-1"></th>
                   </tr>
@@ -295,9 +263,6 @@ export default function SalaryBandDesignerPage() {
                       <td className="py-2 px-1 text-right font-mono text-xs">{formatINR(row.min)}</td>
                       <td className="py-2 px-1 text-right font-mono text-xs font-semibold text-blue-600 dark:text-blue-400">{formatINR(row.mid)}</td>
                       <td className="py-2 px-1 text-right font-mono text-xs">{formatINR(row.max)}</td>
-                      <td className="py-2 px-1 text-right font-mono text-xs text-emerald-600 dark:text-emerald-400">
-                        {row.p50 ? formatINR(row.p50) : '—'}
-                      </td>
                       <td className="py-2 px-1 text-right text-xs text-muted-foreground">
                         {`${(((row.max - row.min) / row.mid) * 100).toFixed(0)}%`}
                       </td>

@@ -4,14 +4,14 @@ import {
   Users, DollarSign, TrendingUp, AlertTriangle, Scale,
   BarChart3, Layers, Sparkles, GitBranch,
   Gift, Award, Settings, Bell, ArrowUpRight, ArrowDownRight,
-  ChevronRight, Building2, Zap,
+  ChevronRight, Building2, Zap, Info,
 } from 'lucide-react';
 import { api } from '../lib/api';
 import { queryKeys, STALE_TIMES } from '../lib/queryClient';
 import { cn, getBandColor } from '../lib/utils';
 import {
-  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell, ScatterChart, Scatter,
-  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ZAxis,
+  BarChart, Bar, LineChart, Line, PieChart, Pie, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
 
 // ── Services ──────────────────────────────────────────────────
@@ -153,6 +153,20 @@ export default function DashboardPage() {
   const attrition: any[] = (attritionRaw as any)?.data ?? (Array.isArray(attritionRaw) ? attritionRaw : []);
   const actionItems: any[] = (actionRaw as any)?.data ?? (Array.isArray(actionRaw) ? actionRaw : []);
 
+  // Derive pay–performance risk list from scatter data
+  const riskRows = compVsPerf
+    .reduce((acc: any[], e: any) => {
+      const rating = Number(e.performanceRating) || 0;
+      const cr = Number(e.compaRatio) || 100;
+      if (rating >= 4.0 && cr < 95)
+        acc.push({ ...e, riskLabel: 'Underpaid Star', _priority: 1, _score: (100 - cr) + rating * 5 });
+      else if (rating < 2.5 && cr > 105)
+        acc.push({ ...e, riskLabel: 'Overpaid / Low Perf', _priority: 2, _score: (cr - 100) + (5 - rating) * 3 });
+      return acc;
+    }, [])
+    .sort((a: any, b: any) => a._priority - b._priority || b._score - a._score)
+    .slice(0, 8);
+
   const gapColor = (pct: number) =>
     Math.abs(pct) < 5 ? 'text-green-600' : Math.abs(pct) < 10 ? 'text-amber-600' : 'text-red-600';
 
@@ -280,53 +294,91 @@ export default function DashboardPage() {
 
       {/* ── Row 3: Comp vs Performance Scatter + Dept Pay Equity Heatmap ── */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* Comp vs Performance Scatter */}
+        {/* Pay–Performance Risk List */}
         <div className="rounded-xl border border-border bg-card p-5">
-          <h3 className="text-sm font-semibold text-foreground mb-1">Compensation vs Performance</h3>
-          <p className="text-xs text-muted-foreground mb-4">Compa-ratio on X · Performance rating on Y · Size = tenure</p>
-          {compVsPerf.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <ScatterChart margin={{ top: 5, right: 10, left: -10, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis
-                  dataKey="compaRatio"
-                  name="Compa-Ratio"
-                  type="number"
-                  domain={['auto', 'auto']}
-                  tick={{ fontSize: 10 }}
-                  label={{ value: 'Compa-Ratio (%)', position: 'insideBottom', offset: -2, fontSize: 10 }}
-                />
-                <YAxis
-                  dataKey="performanceRating"
-                  name="Rating"
-                  type="number"
-                  domain={[1, 5]}
-                  tick={{ fontSize: 10 }}
-                  label={{ value: 'Rating', angle: -90, position: 'insideLeft', fontSize: 10 }}
-                />
-                <ZAxis dataKey="tenureMonths" range={[20, 200]} name="Tenure (months)" />
-                <Tooltip
-                  cursor={{ strokeDasharray: '3 3' }}
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload;
-                    return (
-                      <div className="bg-card border border-border rounded-lg p-2 text-xs shadow-lg">
-                        <p className="font-medium text-foreground">{d.name}</p>
-                        <p className="text-muted-foreground">{d.department} · {d.band}</p>
-                        <p>Compa-ratio: <span className="font-medium">{d.compaRatio.toFixed(1)}%</span></p>
-                        <p>Rating: <span className="font-medium">{d.performanceRating}</span></p>
-                        <p>Tenure: <span className="font-medium">{d.tenureMonths}mo</span></p>
-                      </div>
-                    );
-                  }}
-                />
-                <Scatter data={compVsPerf} fill="hsl(var(--primary))" fillOpacity={0.65} />
-              </ScatterChart>
-            </ResponsiveContainer>
+          <div className="flex items-center justify-between mb-1">
+            <h3 className="text-sm font-semibold text-foreground">Pay–Performance Misalignment</h3>
+            {/* Legend tooltip */}
+            <div className="relative group">
+              <button className="p-1 rounded-md hover:bg-muted/60 transition-colors">
+                <Info className="w-3.5 h-3.5 text-muted-foreground" />
+              </button>
+              <div className="absolute right-0 top-7 z-50 w-72 p-3 rounded-xl border-2 border-border shadow-2xl text-xs opacity-0 pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto transition-opacity duration-150" style={{ background: 'hsl(var(--background))' }}>
+                <p className="font-semibold text-foreground mb-2.5">How employees are classified</p>
+                <div className="space-y-2.5">
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 text-sm leading-none">🔴</span>
+                    <div>
+                      <p className="font-semibold text-foreground">Underpaid Star</p>
+                      <p className="text-muted-foreground mt-0.5">Rating ≥ 4.0 and compa-ratio &lt; 95%</p>
+                      <p className="text-red-600 dark:text-red-400 mt-0.5 font-medium">Retention risk — act immediately</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <span className="mt-0.5 text-sm leading-none">🟡</span>
+                    <div>
+                      <p className="font-semibold text-foreground">Overpaid / Low Perf</p>
+                      <p className="text-muted-foreground mt-0.5">Rating &lt; 2.5 and compa-ratio &gt; 105%</p>
+                      <p className="text-amber-600 dark:text-amber-400 mt-0.5 font-medium">Budget drain — PIP candidate</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">Employees where compensation does not reflect their performance rating</p>
+          {compVsPerf.length === 0 ? (
+            <div className="h-[220px] flex items-center justify-center">
+              <div className="h-full w-full bg-muted/30 rounded animate-pulse" />
+            </div>
+          ) : riskRows.length > 0 ? (
+            <div>
+              {/* Column headers */}
+              <div className="flex items-center gap-2 px-2 pb-2 border-b border-border">
+                <span className="flex-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide">Employee</span>
+                <span className="w-9 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-center">Band</span>
+                <span className="w-12 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Rating</span>
+                <span className="w-12 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Compa</span>
+                <span className="w-36 text-[10px] font-semibold text-muted-foreground uppercase tracking-wide text-right">Risk</span>
+              </div>
+              <div className="space-y-0.5 mt-1 max-h-[190px] overflow-y-auto">
+                {riskRows.map((row: any, i: number) => (
+                  <div key={i} className="flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-muted/40 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-foreground truncate">{row.name}</p>
+                      <p className="text-[10px] text-muted-foreground truncate">{row.department}</p>
+                    </div>
+                    <span className="w-9 text-center text-[10px] font-bold px-1 py-0.5 rounded bg-primary/10 text-primary">{row.band}</span>
+                    <span className="w-12 text-right text-xs font-medium text-foreground tabular-nums">
+                      {Number(row.performanceRating).toFixed(1)}
+                    </span>
+                    <span className={cn(
+                      'w-12 text-right text-xs font-bold tabular-nums',
+                      row.compaRatio < 85 ? 'text-red-600 dark:text-red-400'
+                        : row.compaRatio < 95 ? 'text-amber-600 dark:text-amber-400'
+                        : row.compaRatio > 115 ? 'text-orange-500 dark:text-orange-400'
+                        : 'text-muted-foreground'
+                    )}>
+                      {Number(row.compaRatio).toFixed(0)}%
+                    </span>
+                    <div className="w-36 flex justify-end">
+                      <span className={cn(
+                        'text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap',
+                        row.riskLabel === 'Underpaid Star'
+                          ? 'bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400'
+                          : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'
+                      )}>
+                        {row.riskLabel === 'Underpaid Star' ? '🔴 Underpaid Star' : '🟡 Overpaid / Low Perf'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
           ) : (
-            <div className="h-56 flex items-center justify-center">
-              <div className="h-40 w-full bg-muted/30 rounded animate-pulse" />
+            <div className="h-[220px] flex flex-col items-center justify-center gap-2">
+              <Scale className="w-8 h-8 text-muted-foreground/30" />
+              <p className="text-xs text-muted-foreground">No significant pay–performance misalignments found</p>
             </div>
           )}
         </div>
@@ -369,85 +421,6 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* ── Row 4: RSU Vesting Timeline + Attrition Risk ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {/* RSU Vesting Timeline */}
-        <div className="rounded-xl border border-border bg-card p-5">
-          <h3 className="text-sm font-semibold text-foreground mb-1">RSU Vesting Timeline</h3>
-          <p className="text-xs text-muted-foreground mb-4">Monthly vesting events — next 12 months</p>
-          {rsuTimeline.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={rsuTimeline} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
-                <YAxis tick={{ fontSize: 10 }} />
-                <Tooltip
-                  content={({ active, payload, label }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload;
-                    return (
-                      <div className="bg-card border border-border rounded-lg p-2 text-xs shadow-lg">
-                        <p className="font-medium">{label}</p>
-                        <p>{d.count} event{d.count !== 1 ? 's' : ''} · {d.units.toLocaleString()} units</p>
-                        {d.approxValue > 0 && <p>~₹{(d.approxValue / 100000).toFixed(1)}L value</p>}
-                      </div>
-                    );
-                  }}
-                />
-                <Bar dataKey="count" name="Vesting Events" fill="#06b6d4" radius={[3, 3, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-56 flex items-center justify-center">
-              <div className="h-40 w-full bg-muted/30 rounded animate-pulse" />
-            </div>
-          )}
-        </div>
-
-        {/* Attrition Risk Distribution */}
-        <div className="rounded-xl border border-border bg-card p-5">
-          <h3 className="text-sm font-semibold text-foreground mb-1">Attrition Risk Distribution</h3>
-          <p className="text-xs text-muted-foreground mb-4">Headcount by predicted attrition risk score</p>
-          {attrition.length > 0 ? (
-            <ResponsiveContainer width="100%" height={220}>
-              <BarChart data={attrition} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                <XAxis dataKey="risk" tick={{ fontSize: 12, fontWeight: 500 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip formatter={(value) => [value, 'Employees']} />
-                <Bar dataKey="count" name="Employees" radius={[4, 4, 0, 0]}>
-                  {attrition.map((entry: any) => (
-                    <Cell key={entry.risk} fill={ATTRITION_COLORS[entry.risk] ?? '#94a3b8'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-56 flex items-center justify-center">
-              <div className="h-40 w-full bg-muted/30 rounded animate-pulse" />
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* ── Row 5: Quick Links ── */}
-      <div className="rounded-xl border border-border bg-card p-5">
-        <h3 className="text-sm font-semibold text-foreground mb-4">Quick Navigation</h3>
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
-          {QUICK_LINKS.map(({ to, label, icon: Icon, color }) => (
-            <Link
-              key={to}
-              to={to}
-              className="flex flex-col items-center gap-2 p-3 rounded-xl border border-border hover:border-primary/50 hover:bg-primary/5 transition-all text-center group"
-            >
-              <div className="w-9 h-9 rounded-xl bg-muted/40 group-hover:bg-primary/10 flex items-center justify-center transition-colors">
-                <Icon className={cn(color)} style={{ width: 18, height: 18 }} />
-              </div>
-              <span className="text-xs text-muted-foreground group-hover:text-foreground transition-colors leading-tight">{label}</span>
-            </Link>
-          ))}
-        </div>
-      </div>
     </div>
   );
 }

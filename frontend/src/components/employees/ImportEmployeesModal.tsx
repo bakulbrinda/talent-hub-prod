@@ -39,8 +39,14 @@ export default function ImportEmployeesModal({ open, onClose }: Props) {
   const [replaceMode, setReplaceMode] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
+  // Keep a ref to current stage so socket handlers never go stale
+  const stageRef = useRef<Stage>(stage);
+  stageRef.current = stage;
 
   // Socket listeners for real-time progress
+  // NOTE: `stage` is intentionally NOT in the dep array — removing it prevents
+  // the listeners from being torn-down/re-added on every stage change, which
+  // caused `import:complete` to be missed (race condition).
   useEffect(() => {
     if (!open) return;
     const socket = getSocket();
@@ -48,7 +54,7 @@ export default function ImportEmployeesModal({ open, onClose }: Props) {
 
     const handleProgress = (data: ImportProgress) => {
       setProgress(data);
-      if (stage !== 'processing') setStage('processing');
+      if (stageRef.current !== 'processing') setStage('processing');
     };
 
     const handleComplete = (data: ImportComplete) => {
@@ -68,7 +74,8 @@ export default function ImportEmployeesModal({ open, onClose }: Props) {
       socket.off('import:progress', handleProgress);
       socket.off('import:complete', handleComplete);
     };
-  }, [open, stage, queryClient]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, queryClient]);
 
   const handleFile = useCallback((file: File) => {
     const allowed = ['text/csv', 'application/vnd.ms-excel',

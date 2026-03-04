@@ -11,6 +11,7 @@ export const queryClient = new QueryClient({
         const axiosError = error as AxiosError;
         if (axiosError.response?.status === 401) return false;
         if (axiosError.response?.status === 404) return false;
+        if (axiosError.response?.status === 429) return false; // never retry rate-limit — it makes it worse
         return failureCount < 2;
       },
       refetchOnWindowFocus: false,

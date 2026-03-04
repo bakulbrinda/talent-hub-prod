@@ -44,8 +44,6 @@ const NAV_GROUPS: NavGroup[] = [
     items: [
       { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
       { path: '/ai-assistant', label: 'AI Assistant', icon: Sparkles },
-      { path: '/ai-insights', label: 'AI Insights', icon: Sparkles },
-      { path: '/report', label: 'Leadership Report', icon: FileText },
       { path: '/notifications', label: 'Notifications', icon: Bell },
     ],
   },

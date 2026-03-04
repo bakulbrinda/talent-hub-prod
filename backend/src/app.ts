@@ -63,14 +63,26 @@ app.use(cors({
 
 app.use(compression());
 
+// General API limiter — generous enough for normal SPA usage (React Query fetches,
+// socket-triggered refetches, imports, etc.) but still blocks abuse.
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 500,
+  max: 5000,
   standardHeaders: true,
   legacyHeaders: false,
   message: { error: { code: 'RATE_LIMIT', message: 'Too many requests, please try again later.' } },
 });
 app.use('/api', limiter);
+
+// Tight limiter on login only — prevents brute-force credential attacks.
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: { code: 'RATE_LIMIT', message: 'Too many login attempts, please wait 15 minutes.' } },
+});
+app.use('/api/auth/login', loginLimiter);
 
 // ─── Body Parsing ─────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));

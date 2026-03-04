@@ -13,7 +13,6 @@ const EmployeeDirectoryPage = lazy(() => import('./pages/EmployeeDirectoryPage')
 const EmployeeProfilePage = lazy(() => import('./pages/EmployeeProfilePage'));
 const SalaryBandDesignerPage = lazy(() => import('./pages/SalaryBandDesignerPage'));
 const PayEquityPage = lazy(() => import('./pages/PayEquityPage'));
-const AIInsightsPage = lazy(() => import('./pages/AIInsightsPage'));
 const BenefitsManagementPage = lazy(() => import('./pages/BenefitsManagementPage'));
 const RSUTrackerPage = lazy(() => import('./pages/RSUTrackerPage'));
 const PerformancePage = lazy(() => import('./pages/PerformancePage'));
@@ -26,7 +25,6 @@ const BenefitsHubPage = lazy(() => import('./pages/BenefitsHubPage'));
 const PlatformSettingsPage = lazy(() => import('./pages/PlatformSettingsPage'));
 const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage'));
 const AIAssistantPage = lazy(() => import('./pages/AIAssistantPage'));
-const LeadershipReportPage = lazy(() => import('./pages/LeadershipReportPage'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-screen bg-background">
@@ -60,7 +58,6 @@ function AppRoutes() {
           <Route path="employees/:id" element={<EmployeeProfilePage />} />
           <Route path="salary-bands" element={<SalaryBandDesignerPage />} />
           <Route path="pay-equity" element={<PayEquityPage />} />
-          <Route path="ai-insights" element={<AIInsightsPage />} />
           <Route path="benefits" element={<BenefitsManagementPage />} />
           <Route path="rsu" element={<RSUTrackerPage />} />
           <Route path="performance" element={<PerformancePage />} />
@@ -73,7 +70,6 @@ function AppRoutes() {
           <Route path="compensation" element={<CompensationHubPage />} />
           <Route path="benefits-hub" element={<BenefitsHubPage />} />
           <Route path="ai-assistant" element={<AIAssistantPage />} />
-          <Route path="report" element={<LeadershipReportPage />} />
         </Route>
 
         {/* Catch-all — send to login, ProtectedRoute handles auth check */}
