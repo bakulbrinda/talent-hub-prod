@@ -255,7 +255,7 @@ Example of correct output format (use real values, not these):
 
 Only suggest changes where the data clearly warrants it. If a band is well-calibrated, use direction "maintain".`;
 
-    const response = await callClaude(prompt, { temperature: 0.2, maxTokens: 1200 });
+    const response = await callClaude(prompt, { temperature: 0.2, maxTokens: 2000 });
 
     let suggestions: any[];
     try {
@@ -270,8 +270,8 @@ Only suggest changes where the data clearly warrants it. If a band is well-calib
       suggestions = JSON.parse(raw);
       if (!Array.isArray(suggestions)) throw new Error('Not an array');
     } catch (parseErr: any) {
-      logger.error('[AI Band Suggestions] Parse error:', parseErr.message);
-      logger.error('[AI Band Suggestions] Raw response:', response.content?.slice(0, 500));
+      logger.error(`[AI Band Suggestions] Parse error: ${parseErr.message}`);
+      logger.error(`[AI Band Suggestions] Raw response: ${response.content?.slice(0, 500)}`);
       return res.status(500).json({ error: { code: 'PARSE_ERROR', message: 'AI response could not be parsed' } });
     }
 
