@@ -19,7 +19,6 @@ const VariablePayPage = lazy(() => import('./pages/VariablePayPage'));
 const ScenarioModelerPage = lazy(() => import('./pages/ScenarioModelerPage'));
 const NotificationsCenterPage = lazy(() => import('./pages/NotificationsCenterPage'));
 const SettingsPage = lazy(() => import('./pages/SettingsPage'));
-const CompensationHubPage = lazy(() => import('./pages/CompensationHubPage'));
 const BenefitsHubPage = lazy(() => import('./pages/BenefitsHubPage'));
 const PlatformSettingsPage = lazy(() => import('./pages/PlatformSettingsPage'));
 const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage'));
@@ -66,7 +65,6 @@ function AppRoutes() {
           <Route path="settings" element={<SettingsPage />} />
           <Route path="settings/platform" element={<PlatformSettingsPage />} />
           <Route path="settings/user" element={<UserSettingsPage />} />
-          <Route path="compensation" element={<CompensationHubPage />} />
           <Route path="benefits-hub" element={<BenefitsHubPage />} />
           <Route path="ai-assistant" element={<AIAssistantPage />} />
         </Route>

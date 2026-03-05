@@ -52,7 +52,6 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Compensation',
     icon: DollarSign,
     items: [
-      { path: '/compensation', label: 'Hub Overview', icon: Building2 },
       { path: '/salary-bands', label: 'Salary Bands', icon: BarChart3 },
       { path: '/pay-equity', label: 'Pay Equity', icon: Scale },
       { path: '/variable-pay', label: 'Variable Pay', icon: Zap },
