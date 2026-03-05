@@ -14,6 +14,10 @@ export const salaryBandService = {
     const res = await api.put<{ data: any }>(`/salary-bands/${id}`, data);
     return res.data;
   },
+  deleteSalaryBand: async (id: string) => {
+    const res = await api.delete<{ data: { success: boolean } }>(`/salary-bands/${id}`);
+    return res.data;
+  },
   getMarketBenchmarks: async (filters?: { bandId?: string; location?: string }) => {
     const params = filters ? new URLSearchParams(filters as any) : '';
     const res = await api.get<{ data: any[] }>(`/salary-bands/market-benchmarks?${params}`);
