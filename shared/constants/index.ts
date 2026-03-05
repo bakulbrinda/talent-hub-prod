@@ -22,6 +22,8 @@ export const BAND_LEVELS: Record<BandCode, number> = {
   A1: 1, A2: 2, P1: 3, P2: 4, P3: 5, M1: 6, M2: 7, D0: 8, D1: 9, D2: 10,
 };
 
+export const BAND_ORDER: BandCode[] = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
+
 export const BAND_COLORS: Record<BandCode, string> = {
   A1: '#94a3b8',
   A2: '#64748b',

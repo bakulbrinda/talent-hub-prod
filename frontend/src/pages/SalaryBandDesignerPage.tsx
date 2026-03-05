@@ -10,6 +10,7 @@ import {
   ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer,
 } from 'recharts';
+import { BAND_ORDER } from '../../../shared/constants';
 
 const TABS = [
   { id: 'chart', label: 'Band Chart' },
@@ -19,7 +20,6 @@ const TABS = [
 ] as const;
 type TabId = typeof TABS[number]['id'];
 
-const BAND_ORDER = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
 
 function SalaryBandTooltip({ active, payload }: any) {
   if (!active || !payload?.length) return null;
