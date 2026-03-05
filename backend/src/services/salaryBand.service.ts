@@ -78,7 +78,17 @@ export const salaryBandService = {
     });
 
     const bands = await prisma.salaryBand.findMany({ include: { band: true } });
-    const bandMap = new Map(bands.map(b => [b.band.code, b]));
+
+    // Prefer the "All Departments" (null jobAreaId) record per band code.
+    // Fall back to the first record found for that code.
+    const bandMap = new Map<string, (typeof bands)[number]>();
+    for (const sb of bands) {
+      const code = sb.band.code;
+      const existing = bandMap.get(code);
+      if (!existing || sb.jobAreaId === null) {
+        bandMap.set(code, sb);
+      }
+    }
 
     return employees
       .filter(emp => {
