@@ -40,6 +40,25 @@ export const jobArchitectureService = {
   createBand: async (data: { code: string; label: string; level: number; isEligibleForRSU?: boolean }) =>
     prisma.band.create({ data }),
 
+  updateBand: async (id: string, data: { code?: string; label?: string; level?: number; isEligibleForRSU?: boolean }) =>
+    prisma.band.update({ where: { id }, data }),
+
+  deleteBand: async (id: string) => {
+    const band = await prisma.band.findUniqueOrThrow({ where: { id } });
+    const employeeCount = await prisma.employee.count({
+      where: { band: band.code, employmentStatus: 'ACTIVE' },
+    });
+    if (employeeCount > 0) {
+      const err: any = new Error(`Cannot delete band ${band.code} — ${employeeCount} active employee(s) assigned to it`);
+      err.status = 409;
+      err.employeeCount = employeeCount;
+      throw err;
+    }
+    // Delete salary bands first (SalaryBand has no cascade on delete for Band)
+    await prisma.salaryBand.deleteMany({ where: { bandId: id } });
+    return prisma.band.delete({ where: { id } });
+  },
+
   getGrades: async (bandId?: string) =>
     prisma.grade.findMany({
       where: bandId ? { bandId } : undefined,

@@ -26,6 +26,21 @@ export const jobArchitectureController = {
   createBand: async (req: Request, res: Response, next: NextFunction) => {
     try { res.status(201).json({ data: await jobArchitectureService.createBand(req.body) }); } catch (e) { next(e); }
   },
+  updateBand: async (req: Request, res: Response, next: NextFunction) => {
+    try { res.json({ data: await jobArchitectureService.updateBand(req.params.id, req.body) }); } catch (e) { next(e); }
+  },
+  deleteBand: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await jobArchitectureService.deleteBand(req.params.id);
+      res.json({ data: { success: true } });
+    } catch (e: any) {
+      if (e.status === 409) {
+        res.status(409).json({ error: { code: 'BAND_IN_USE', message: e.message, employeeCount: e.employeeCount } });
+      } else {
+        next(e);
+      }
+    }
+  },
   getGrades: async (req: Request, res: Response, next: NextFunction) => {
     try { res.json({ data: await jobArchitectureService.getGrades(req.query.bandId as string) }); } catch (e) { next(e); }
   },

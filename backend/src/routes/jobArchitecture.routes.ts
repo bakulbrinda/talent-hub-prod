@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { jobArchitectureController as ctrl } from '../controllers/jobArchitecture.controller';
 import { authenticate } from '../middleware/authenticate';
+import { requireRole } from '../middleware/requireRole';
 
 const router = Router();
 router.use(authenticate);
@@ -17,6 +18,8 @@ router.post('/job-families', ctrl.createJobFamily);
 
 router.get('/bands', ctrl.getBands);
 router.post('/bands', ctrl.createBand);
+router.put('/bands/:id', ctrl.updateBand);
+router.delete('/bands/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.deleteBand);
 
 router.get('/grades', ctrl.getGrades);
 
