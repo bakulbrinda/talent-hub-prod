@@ -113,7 +113,7 @@ export default function SalaryBandDesignerPage() {
     }),
     onSuccess: () => {
       toast.success('Salary band range created');
-      qc.invalidateQueries({ queryKey: ['salary-bands'] });
+      qc.invalidateQueries({ queryKey: queryKeys.salaryBands.all() });
       setShowModal(false);
       setForm(EMPTY_FORM);
     },
@@ -132,7 +132,7 @@ export default function SalaryBandDesignerPage() {
     }),
     onSuccess: () => {
       toast.success('Band range updated');
-      qc.invalidateQueries({ queryKey: ['salary-bands'] });
+      qc.invalidateQueries({ queryKey: queryKeys.salaryBands.all() });
       setEditingRange(null);
     },
     onError: () => toast.error('Failed to update range'),
@@ -144,7 +144,7 @@ export default function SalaryBandDesignerPage() {
     mutationFn: () => salaryBandService.deleteSalaryBand(deletingRange!.id),
     onSuccess: () => {
       toast.success('Range deleted');
-      qc.invalidateQueries({ queryKey: ['salary-bands'] });
+      qc.invalidateQueries({ queryKey: queryKeys.salaryBands.all() });
       setDeletingRange(null);
     },
     onError: () => toast.error('Failed to delete range'),
@@ -156,8 +156,8 @@ export default function SalaryBandDesignerPage() {
     mutationFn: () => api.delete(`/bands/${deletingTier!.id}`),
     onSuccess: () => {
       toast.success(`Band ${deletingTier!.code} deleted`);
-      qc.invalidateQueries({ queryKey: ['salary-bands'] });
-      qc.invalidateQueries({ queryKey: ['bands'] });
+      qc.invalidateQueries({ queryKey: queryKeys.salaryBands.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.jobArchitecture.bands });
       setDeletingTier(null);
     },
     onError: (err: any) => {

@@ -18,7 +18,7 @@ router.post('/job-families', ctrl.createJobFamily);
 
 router.get('/bands', ctrl.getBands);
 router.post('/bands', ctrl.createBand);
-router.put('/bands/:id', ctrl.updateBand);
+router.put('/bands/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.updateBand);
 router.delete('/bands/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.deleteBand);
 
 router.get('/grades', ctrl.getGrades);

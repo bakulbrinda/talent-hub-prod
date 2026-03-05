@@ -35,7 +35,14 @@ export const jobArchitectureController = {
       res.json({ data: { success: true } });
     } catch (e: any) {
       if (e.status === 409) {
-        res.status(409).json({ error: { code: 'BAND_IN_USE', message: e.message, employeeCount: e.employeeCount } });
+        res.status(409).json({
+          error: {
+            code: 'BAND_IN_USE',
+            message: e.message,
+            ...(e.employeeCount !== undefined && { employeeCount: e.employeeCount }),
+            ...(e.jobCodeCount !== undefined && { jobCodeCount: e.jobCodeCount }),
+          }
+        });
       } else {
         next(e);
       }
