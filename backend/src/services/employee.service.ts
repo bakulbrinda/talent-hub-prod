@@ -57,7 +57,7 @@ export const employeeService = {
         select: {
           id: true, employeeId: true, firstName: true, lastName: true,
           email: true, designation: true, department: true, band: true,
-          grade: true, annualFixed: true, annualCtc: true,
+          grade: true, annualFixed: true, annualCtc: true, variablePay: true,
           workMode: true, workLocation: true, gender: true,
           compaRatio: true, employmentStatus: true,
           dateOfJoining: true,

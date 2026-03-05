@@ -5,6 +5,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { Sparkles, X, Send, Trash2, ChevronDown, Loader2, Bot, User } from 'lucide-react';
 import { cn } from '../lib/utils';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface Message {
   role: 'user' | 'assistant';
@@ -21,6 +23,7 @@ const TOOL_LABELS: Record<string, string> = {
   get_band_analysis:            'Checking salary bands…',
   get_performance_pay_alignment:'Analysing performance-pay alignment…',
   get_benefits_data:            'Fetching benefits data…',
+  get_variable_pay:             'Analysing variable pay…',
   run_scenario:                 'Running compensation scenario…',
 };
 
@@ -284,7 +287,36 @@ export function ChatPanel() {
                   </div>
                 )}
                 {msg.content ? (
-                  <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
+                  msg.role === 'assistant' ? (
+                    <ReactMarkdown
+                      remarkPlugins={[remarkGfm]}
+                      components={{
+                        h3: ({ children }) => <p className="text-xs font-bold text-foreground mt-2 mb-1">{children}</p>,
+                        h4: ({ children }) => <p className="text-xs font-semibold text-foreground mt-1.5 mb-0.5">{children}</p>,
+                        p:  ({ children }) => <p className="text-sm leading-relaxed mb-1 last:mb-0">{children}</p>,
+                        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                        hr: () => <hr className="border-border my-2" />,
+                        ul: ({ children }) => <ul className="list-disc list-inside space-y-0.5 text-sm mb-1">{children}</ul>,
+                        ol: ({ children }) => <ol className="list-decimal list-inside space-y-0.5 text-sm mb-1">{children}</ol>,
+                        li: ({ children }) => <li className="text-sm leading-relaxed">{children}</li>,
+                        table: ({ children }) => (
+                          <div className="overflow-x-auto my-2 rounded-lg border border-border">
+                            <table className="w-full text-xs border-collapse">{children}</table>
+                          </div>
+                        ),
+                        thead: ({ children }) => <thead className="bg-muted/60">{children}</thead>,
+                        tbody: ({ children }) => <tbody className="divide-y divide-border">{children}</tbody>,
+                        tr: ({ children }) => <tr className="divide-x divide-border">{children}</tr>,
+                        th: ({ children }) => <th className="px-2 py-1.5 text-left font-semibold text-foreground">{children}</th>,
+                        td: ({ children }) => <td className="px-2 py-1.5 text-muted-foreground">{children}</td>,
+                        code: ({ children }) => <code className="text-xs bg-muted px-1 py-0.5 rounded font-mono">{children}</code>,
+                      }}
+                    >
+                      {msg.content}
+                    </ReactMarkdown>
+                  ) : (
+                    <p className="text-sm leading-relaxed">{msg.content}</p>
+                  )
                 ) : msg.isStreaming ? (
                   <span className="inline-flex gap-0.5 items-center">
                     <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 animate-bounce [animation-delay:-0.3s]" />

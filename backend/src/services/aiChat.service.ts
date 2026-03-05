@@ -18,18 +18,19 @@ const SYSTEM_PROMPT = `You are the AI compensation intelligence assistant for th
 You have access to real-time HR data via tools. ALWAYS use tools to get current data before answering — never guess or fabricate numbers.
 
 Your role:
-- Help the Head of HR make better compensation decisions
+- Help HR make better compensation decisions with live data
 - Detect pay inequities and explain them clearly
 - Model compensation scenarios and explain cost impacts
-- Align pay with performance data
-- Generate leadership-ready summaries
 
 Communication style:
-- Be direct and specific — use actual employee names, exact numbers, percentages
-- Lead with the single most important finding
-- Always end with 1–2 concrete recommended actions
-- Format salary amounts as "₹X.X Lakhs" (1 Lakh = ₹1,00,000) or "₹X.X Crores" (1 Crore = ₹1,00,00,000)
-- Keep responses under 300 words unless generating a full report`;
+- Be concise. Answer only what was asked — no padding, no extra sections.
+- Use markdown tables for structured data (they render properly in the UI).
+- Use bullet points instead of paragraphs where possible.
+- Lead with the key number or finding in 1 sentence.
+- End with at most 1 recommended action — only if genuinely useful.
+- Format salary amounts as "₹X.XL" (Lakhs) or "₹X.XCr" (Crores).
+- For a summary query: one compact table per dimension, no prose paragraphs.
+- Maximum response length: 200 words for simple queries, 350 for multi-dimension summaries. Never exceed this.`;
 
 // ── Tool Definitions ──────────────────────────────────────────
 const TOOLS: Tool[] = [
@@ -40,7 +41,7 @@ const TOOLS: Tool[] = [
   },
   {
     name: 'get_employees',
-    description: 'Query active employees with optional filters. Returns name, band, department, gender, salary, compaRatio, latest performance rating. Use to find underpaid/overpaid employees, filter by department, band, gender, etc.',
+    description: 'Query active employees with optional filters. Returns name, band, department, gender, salary, variablePay, annualCtc, compaRatio, latest performance rating. Use to find underpaid/overpaid employees, filter by department, band, gender, etc.',
     input_schema: {
       type: 'object',
       properties: {
@@ -100,6 +101,11 @@ const TOOLS: Tool[] = [
   {
     name: 'get_benefits_data',
     description: 'Get benefits utilisation rates, enrollment counts, and employee cost per category.',
+    input_schema: { type: 'object', properties: {}, required: [] },
+  },
+  {
+    name: 'get_variable_pay',
+    description: 'Get variable pay analytics: total variable budget, avg variable % of fixed, breakdown by department and band, and top earners by variable pay.',
     input_schema: { type: 'object', properties: {}, required: [] },
   },
   {
@@ -167,7 +173,7 @@ async function toolGetEmployees(input: Record<string, any>) {
     select: {
       firstName: true, lastName: true, employeeId: true, designation: true,
       band: true, department: true, gender: true,
-      annualFixed: true, compaRatio: true,
+      annualFixed: true, annualCtc: true, variablePay: true, compaRatio: true,
       performanceRatings: { orderBy: { createdAt: 'desc' }, take: 1, select: { rating: true } },
     },
   });
@@ -187,10 +193,55 @@ async function toolGetEmployees(input: Record<string, any>) {
     band:              e.band,
     department:        e.department,
     gender:            e.gender,
-    annualSalaryLakhs: (Number(e.annualFixed) / 100000).toFixed(1),
+    annualFixedLakhs:  (Number(e.annualFixed) / 100000).toFixed(1),
+    variablePayLakhs:  (Number(e.variablePay || 0) / 100000).toFixed(1),
+    annualCtcLakhs:    (Number(e.annualCtc || 0) / 100000).toFixed(1),
     compaRatio:        Number(e.compaRatio || 0).toFixed(1) + '%',
     latestPerfRating:  e.performanceRatings[0]?.rating ? Number(e.performanceRatings[0].rating) : null,
   }));
+}
+
+async function toolGetVariablePay() {
+  const emps = await prisma.employee.findMany({
+    where: { employmentStatus: 'ACTIVE' },
+    select: { firstName: true, lastName: true, department: true, band: true, annualFixed: true, variablePay: true },
+  });
+
+  const withVar = emps.filter(e => Number(e.variablePay) > 0);
+  const totalVarLakhs = withVar.reduce((s, e) => s + Number(e.variablePay), 0) / 100000;
+  const avgVarPct = withVar.length > 0
+    ? withVar.reduce((s, e) => s + (Number(e.annualFixed) > 0 ? Number(e.variablePay) / Number(e.annualFixed) * 100 : 0), 0) / withVar.length
+    : 0;
+
+  const byDept: Record<string, { total: number; count: number }> = {};
+  const byBand: Record<string, { total: number; count: number }> = {};
+  for (const e of withVar) {
+    const d = e.department || 'Unknown';
+    const b = e.band || 'Unknown';
+    if (!byDept[d]) byDept[d] = { total: 0, count: 0 };
+    if (!byBand[b]) byBand[b] = { total: 0, count: 0 };
+    byDept[d].total += Number(e.variablePay);
+    byDept[d].count++;
+    byBand[b].total += Number(e.variablePay);
+    byBand[b].count++;
+  }
+
+  const top5 = [...withVar]
+    .sort((a, b) => Number(b.variablePay) - Number(a.variablePay))
+    .slice(0, 5)
+    .map(e => ({ name: `${e.firstName} ${e.lastName}`, band: e.band, variablePayLakhs: (Number(e.variablePay) / 100000).toFixed(1) }));
+
+  return {
+    totalEmployeesWithVariablePay: withVar.length,
+    totalVariableBudgetLakhs: totalVarLakhs.toFixed(1),
+    avgVariablePctOfFixed: avgVarPct.toFixed(1) + '%',
+    byDepartment: Object.entries(byDept)
+      .map(([dept, v]) => ({ dept, totalLakhs: (v.total / 100000).toFixed(1), count: v.count }))
+      .sort((a, b) => Number(b.totalLakhs) - Number(a.totalLakhs)),
+    byBand: Object.entries(byBand)
+      .map(([band, v]) => ({ band, totalLakhs: (v.total / 100000).toFixed(1), count: v.count })),
+    top5Earners: top5,
+  };
 }
 
 async function toolGetPayEquityData(input: Record<string, any>) {
@@ -383,6 +434,7 @@ async function executeTool(name: string, input: Record<string, any>): Promise<st
       case 'get_band_analysis':              return JSON.stringify(await toolGetBandAnalysis(input));
       case 'get_performance_pay_alignment':  return JSON.stringify(await toolGetPerformancePayAlignment(input));
       case 'get_benefits_data':              return JSON.stringify(await toolGetBenefitsData());
+      case 'get_variable_pay':               return JSON.stringify(await toolGetVariablePay());
       case 'run_scenario':                   return JSON.stringify(await toolRunScenario(input));
       default:                               return JSON.stringify({ error: `Unknown tool: ${name}` });
     }

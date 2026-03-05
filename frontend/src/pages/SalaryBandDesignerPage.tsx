@@ -44,7 +44,7 @@ function SalaryBandTooltip({ active, payload }: any) {
   );
 }
 
-const EMPTY_FORM = { bandId: '', jobAreaId: '', minSalary: '', midSalary: '', maxSalary: '', effectiveDate: new Date().toISOString().slice(0, 10) };
+const EMPTY_FORM = { bandId: '', bandCode: '', jobAreaId: '', minSalary: '', midSalary: '', maxSalary: '', effectiveDate: new Date().toISOString().slice(0, 10) };
 
 export default function SalaryBandDesignerPage() {
   const [activeTab, setActiveTab] = useState<TabId>('chart');
@@ -104,7 +104,7 @@ export default function SalaryBandDesignerPage() {
 
   const createMutation = useMutation({
     mutationFn: () => salaryBandService.create({
-      bandId: form.bandId,
+      ...(form.bandId ? { bandId: form.bandId } : { bandCode: form.bandCode.trim().toUpperCase() }),
       ...(form.jobAreaId ? { jobAreaId: form.jobAreaId } : {}),
       minSalary: Number(form.minSalary),
       midSalary: Number(form.midSalary),
@@ -112,8 +112,9 @@ export default function SalaryBandDesignerPage() {
       effectiveDate: new Date(form.effectiveDate),
     }),
     onSuccess: () => {
-      toast.success('Salary band range created');
+      toast.success(form.bandId ? 'Salary range added' : 'New band created');
       qc.invalidateQueries({ queryKey: queryKeys.salaryBands.all() });
+      qc.invalidateQueries({ queryKey: queryKeys.jobArchitecture.bands });
       setShowModal(false);
       setForm(EMPTY_FORM);
     },
@@ -584,7 +585,9 @@ export default function SalaryBandDesignerPage() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
           <div className="bg-card border border-border rounded-2xl shadow-2xl w-full max-w-md mx-4">
             <div className="flex items-center justify-between px-6 py-4 border-b border-border">
-              <h2 className="text-base font-semibold text-foreground">New Salary Band</h2>
+              <h2 className="text-base font-semibold text-foreground">
+                {form.bandId ? `Add Range · ${allBands.find((b: any) => b.id === form.bandId)?.code ?? ''}` : 'New Salary Band'}
+              </h2>
               <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground">
                 <X className="w-4 h-4" />
               </button>
@@ -593,20 +596,23 @@ export default function SalaryBandDesignerPage() {
               onSubmit={(e) => { e.preventDefault(); createMutation.mutate(); }}
               className="px-6 py-5 space-y-4"
             >
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">Band</label>
-                <select
-                  required
-                  value={form.bandId}
-                  onChange={(e) => setForm(f => ({ ...f, bandId: e.target.value }))}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                >
-                  <option value="">Select a band…</option>
-                  {allBands.map((b: any) => (
-                    <option key={b.id} value={b.id}>{b.code} — {b.label}</option>
-                  ))}
-                </select>
-              </div>
+              {!form.bandId && (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">Band Code</label>
+                  <input
+                    required
+                    type="text"
+                    value={form.bandCode}
+                    onChange={(e) => setForm(f => ({ ...f, bandCode: e.target.value }))}
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 uppercase"
+                    placeholder="e.g. A1, P3, X1…"
+                    maxLength={10}
+                  />
+                  <p className="text-[11px] text-muted-foreground mt-1">
+                    If the band doesn't exist it will be created automatically.
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">Department (optional)</label>
                 <select
@@ -662,7 +668,7 @@ export default function SalaryBandDesignerPage() {
                   disabled={createMutation.isPending}
                   className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-60"
                 >
-                  {createMutation.isPending ? 'Creating…' : 'Create Band'}
+                  {createMutation.isPending ? 'Creating…' : form.bandId ? 'Add Range' : 'Create Band'}
                 </button>
               </div>
             </form>

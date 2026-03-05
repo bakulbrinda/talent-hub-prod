@@ -15,8 +15,33 @@ export const salaryBandService = {
     });
   },
 
-  create: async (data: any) =>
-    prisma.salaryBand.create({ data, include: { band: true, jobArea: true } }),
+  create: async (data: any) => {
+    let bandId = data.bandId;
+
+    if (!bandId && data.bandCode) {
+      const code = String(data.bandCode).trim().toUpperCase();
+      let band = await prisma.band.findUnique({ where: { code } });
+      if (!band) {
+        const maxBand = await prisma.band.findFirst({ orderBy: { level: 'desc' } });
+        const nextLevel = (maxBand?.level ?? 0) + 1;
+        band = await prisma.band.create({
+          data: {
+            code,
+            label: data.bandLabel?.trim() || code,
+            level: nextLevel,
+            isEligibleForRSU: false,
+          },
+        });
+      }
+      bandId = band.id;
+    }
+
+    const { bandCode: _bc, bandLabel: _bl, ...rest } = data;
+    return prisma.salaryBand.create({
+      data: { ...rest, bandId },
+      include: { band: true, jobArea: true },
+    });
+  },
 
   update: async (id: string, data: any) => {
     // Fetch the band code before updating so we can target the right employees
