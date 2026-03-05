@@ -56,6 +56,15 @@ export const salaryBandService = {
     return updated;
   },
 
+  deleteSalaryBand: async (id: string) => {
+    await prisma.salaryBand.delete({ where: { id } });
+    await Promise.allSettled([
+      cacheDelPattern('dashboard:*'),
+      cacheDelPattern('salary-bands:*'),
+    ]);
+    emitSalaryBandUpdated();
+  },
+
   getMarketBenchmarks: async (filters?: { bandId?: string; location?: string }) => {
     return prisma.marketBenchmark.findMany({
       where: {

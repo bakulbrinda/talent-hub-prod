@@ -11,6 +11,12 @@ export const salaryBandController = {
   update: async (req: Request, res: Response, next: NextFunction) => {
     try { res.json({ data: await salaryBandService.update(req.params.id, req.body) }); } catch (e) { next(e); }
   },
+  deleteSalaryBand: async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      await salaryBandService.deleteSalaryBand(req.params.id);
+      res.json({ data: { success: true } });
+    } catch (e) { next(e); }
+  },
   getMarketBenchmarks: async (req: Request, res: Response, next: NextFunction) => {
     try { res.json({ data: await salaryBandService.getMarketBenchmarks(req.query as any) }); } catch (e) { next(e); }
   },
