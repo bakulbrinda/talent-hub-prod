@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, forwardRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -17,7 +17,7 @@ const schema = z.object({
   dateOfJoining: z.string().min(1, 'Date of joining is required'),
   department: z.string().min(1, 'Department is required'),
   designation: z.string().min(1, 'Designation is required'),
-  band: z.enum(['A1', 'A2', 'P1', 'P2', 'P3', 'P4']),
+  band: z.enum(['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2']),
   grade: z.string().min(1, 'Grade is required'),
   employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT']).default('FULL_TIME'),
   workMode: z.enum(['REMOTE', 'HYBRID', 'ONSITE']).default('HYBRID'),
@@ -37,10 +37,10 @@ interface Props {
 }
 
 const DEPARTMENTS = ['Engineering', 'Sales', 'Product', 'HR', 'Finance', 'Operations'];
-const BANDS = ['A1', 'A2', 'P1', 'P2', 'P3', 'P4'];
-const GRADES = ['A1-L1', 'A1-L2', 'A2-L1', 'A2-L2', 'P1-L1', 'P1-L2', 'P2-L1', 'P2-L2', 'P3-L1', 'P3-L2', 'P4-L1', 'P4-L2'];
+const BANDS = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
+const GRADES = ['A1-L1', 'A1-L2', 'A2-L1', 'A2-L2', 'P1-L1', 'P1-L2', 'P2-L1', 'P2-L2', 'P3-L1', 'P3-L2', 'M1-L1', 'M1-L2', 'M2-L1', 'M2-L2', 'D0-L1', 'D1-L1', 'D2-L1'];
 
-function Field({ label, error, children }: { label: string; error?: string; children: React.ReactNode }) {
+function Field({ label, error, children }: { label: React.ReactNode; error?: string; children: React.ReactNode }) {
   return (
     <div>
       <label className="block text-xs font-medium text-muted-foreground mb-1">{label}</label>
@@ -50,25 +50,27 @@ function Field({ label, error, children }: { label: string; error?: string; chil
   );
 }
 
-function Input({ className, ...props }: React.InputHTMLAttributes<HTMLInputElement>) {
-  return (
+const Input = forwardRef<HTMLInputElement, React.InputHTMLAttributes<HTMLInputElement>>(
+  ({ className, ...props }, ref) => (
     <input
+      ref={ref}
       className={cn('w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary', className)}
       {...props}
     />
-  );
-}
+  )
+);
 
-function Select({ className, children, ...props }: React.SelectHTMLAttributes<HTMLSelectElement>) {
-  return (
+const Select = forwardRef<HTMLSelectElement, React.SelectHTMLAttributes<HTMLSelectElement>>(
+  ({ className, children, ...props }, ref) => (
     <select
+      ref={ref}
       className={cn('w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary', className)}
       {...props}
     >
       {children}
     </select>
-  );
-}
+  )
+);
 
 export default function AddEmployeeModal({ open, onClose, prefill }: Props) {
   const [tab, setTab] = useState<'personal' | 'employment' | 'compensation'>('personal');
@@ -76,12 +78,28 @@ export default function AddEmployeeModal({ open, onClose, prefill }: Props) {
   const queryClient = useQueryClient();
   const isEditing = !!prefill?.id;
 
-  const { register, handleSubmit, formState: { errors }, reset } = useForm<FormData>({
+  const { register, handleSubmit, formState: { errors }, reset, watch, setValue } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: prefill
-      ? { ...prefill, annualFixed: (prefill as any).annualFixed ? Number((prefill as any).annualFixed) : undefined }
+      ? {
+          ...prefill,
+          annualFixed: prefill.annualFixed ? Number(prefill.annualFixed) : undefined,
+          variablePay: prefill.variablePay != null ? Number(prefill.variablePay) : undefined,
+          annualCtc: prefill.annualCtc != null ? Number(prefill.annualCtc) : undefined,
+        }
       : { employmentType: 'FULL_TIME', workMode: 'HYBRID' },
   });
+
+  const [ctcManual, setCtcManual] = useState(!!prefill?.id);
+  const [vpManual, setVpManual] = useState(!!prefill?.id);
+
+  const watchedFixed = watch('annualFixed');
+
+  useEffect(() => {
+    if (!watchedFixed || isNaN(Number(watchedFixed))) return;
+    if (!vpManual) setValue('variablePay', Math.round(Number(watchedFixed) * 0.10));
+    if (!ctcManual) setValue('annualCtc', Math.round(Number(watchedFixed) * 1.20));
+  }, [watchedFixed, vpManual, ctcManual]);
 
   const onSubmit = async (data: FormData) => {
     setSubmitting(true);
@@ -261,18 +279,26 @@ export default function AddEmployeeModal({ open, onClose, prefill }: Props) {
                       {...register('annualFixed', { valueAsNumber: true })}
                     />
                   </Field>
-                  <Field label="Variable Pay (₹)" error={errors.variablePay?.message}>
+                  <Field
+                    label={<span className="flex items-center gap-1">Variable Pay (₹) {!vpManual && Number(watchedFixed) > 0 && <span className="text-[10px] text-primary/70 font-medium">(auto)</span>}</span>}
+                    error={errors.variablePay?.message}
+                  >
                     <Input
                       type="number"
                       placeholder="Auto: 10% of fixed"
                       {...register('variablePay', { valueAsNumber: true })}
+                      onInput={() => setVpManual(true)}
                     />
                   </Field>
-                  <Field label="Annual CTC (₹)" error={errors.annualCtc?.message}>
+                  <Field
+                    label={<span className="flex items-center gap-1">Annual CTC (₹) {!ctcManual && Number(watchedFixed) > 0 && <span className="text-[10px] text-primary/70 font-medium">(auto)</span>}</span>}
+                    error={errors.annualCtc?.message}
+                  >
                     <Input
                       type="number"
                       placeholder="Auto-calculated"
                       {...register('annualCtc', { valueAsNumber: true })}
+                      onInput={() => setCtcManual(true)}
                     />
                   </Field>
                 </div>

@@ -373,6 +373,7 @@ export default function EmployeeDirectoryPage() {
 
       {/* Modals */}
       <AddEmployeeModal
+        key={editEmployee?.id ?? 'new'}
         open={showAdd}
         onClose={() => { setShowAdd(false); setEditEmployee(null); }}
         prefill={editEmployee ? {
