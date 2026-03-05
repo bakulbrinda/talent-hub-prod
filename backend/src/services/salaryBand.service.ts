@@ -57,10 +57,13 @@ export const salaryBandService = {
   },
 
   deleteSalaryBand: async (id: string) => {
+    await prisma.salaryBand.findUniqueOrThrow({ where: { id } });
     await prisma.salaryBand.delete({ where: { id } });
     await Promise.allSettled([
       cacheDelPattern('dashboard:*'),
+      cacheDelPattern('pay-equity:*'),
       cacheDelPattern('salary-bands:*'),
+      cacheDelPattern('performance:*'),
     ]);
     emitSalaryBandUpdated();
   },
