@@ -1,9 +1,7 @@
-import { useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Star, TrendingUp, AlertTriangle, Sparkles, RefreshCw, X, Loader2, Mail } from 'lucide-react';
-import ReactMarkdown from 'react-markdown';
+import { useState, useMemo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Star, TrendingUp, X, Mail, ChevronUp, ChevronDown, Search, Filter, ArrowUpDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
 import EmailComposerModal, { type EmailComposerEmployee } from '../components/EmailComposerModal';
@@ -12,7 +10,6 @@ const performanceApi = {
   getMatrix: async () => { const r = await api.get('/performance/matrix'); return r.data; },
   getPromotionReadiness: async () => { const r = await api.get('/performance/promotion-readiness'); return r.data; },
   getPayAlignmentGaps: async () => { const r = await api.get('/performance/pay-alignment-gaps'); return r.data; },
-  getAIAnalysis: async () => { const r = await api.get('/performance/ai-analysis'); return r.data; },
 };
 
 const BAND_COLORS: Record<string, string> = {
@@ -51,10 +48,19 @@ function RatingStars({ rating }: { rating: number }) {
 
 export default function PerformancePage() {
   const [activeTab, setActiveTab] = useState<'matrix' | 'promotion' | 'gaps'>('matrix');
-  const [showAI, setShowAI] = useState(false);
   const [emailTarget, setEmailTarget] = useState<EmailComposerEmployee | null>(null);
+  const [showFilters, setShowFilters] = useState(false);
+  const [searchName, setSearchName] = useState('');
+  const [filterDepartment, setFilterDepartment] = useState('');
+  const [filterBand, setFilterBand] = useState('');
+  const [filterQuadrant, setFilterQuadrant] = useState('');
+  const [filterRatingMin, setFilterRatingMin] = useState('');
+  const [filterRatingMax, setFilterRatingMax] = useState('');
+  const [filterCompaMin, setFilterCompaMin] = useState('');
+  const [filterCompaMax, setFilterCompaMax] = useState('');
+  const [sortBy, setSortBy] = useState('');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
 
   const { data: matrixRaw, isLoading: matrixLoading } = useQuery({
     queryKey: ['performance', 'matrix'],
@@ -68,17 +74,68 @@ export default function PerformancePage() {
     queryKey: ['performance', 'gaps'],
     queryFn: performanceApi.getPayAlignmentGaps,
   });
-  const { data: aiRaw, isLoading: aiLoading } = useQuery({
-    queryKey: ['performance', 'ai-analysis'],
-    queryFn: performanceApi.getAIAnalysis,
-    enabled: showAI,
-    staleTime: 30 * 60 * 1000,
-  });
-  const aiNarrative: string = aiRaw?.data?.narrative || '';
 
   const matrix = (matrixRaw?.data || []) as any[];
   const promotionList = (promotionRaw?.data || []) as any[];
   const gaps = (gapsRaw?.data || { stars: [], under: [], summary: { starCount: 0, underCount: 0 } }) as any;
+
+  // Unique filter options derived from all data
+  const allDepartments = useMemo(() => {
+    const depts = new Set<string>();
+    matrix.forEach((e: any) => e.department && depts.add(e.department));
+    promotionList.forEach((e: any) => e.department && depts.add(e.department));
+    return Array.from(depts).sort();
+  }, [matrix, promotionList]);
+
+  const allBands = useMemo(() => {
+    const bands = new Set<string>();
+    matrix.forEach((e: any) => e.band && bands.add(e.band));
+    promotionList.forEach((e: any) => e.band && bands.add(e.band));
+    return Array.from(bands).sort();
+  }, [matrix, promotionList]);
+
+  const activeFilterCount = [searchName, filterDepartment, filterBand, filterQuadrant, filterRatingMin, filterRatingMax, filterCompaMin, filterCompaMax].filter(Boolean).length;
+
+  function applyFilters(list: any[]) {
+    let result = list;
+    if (searchName) result = result.filter((e: any) => e.name?.toLowerCase().includes(searchName.toLowerCase()));
+    if (filterDepartment) result = result.filter((e: any) => e.department === filterDepartment);
+    if (filterBand) result = result.filter((e: any) => e.band === filterBand);
+    if (filterQuadrant) result = result.filter((e: any) => e.quadrant === filterQuadrant);
+    if (filterRatingMin) result = result.filter((e: any) => e.rating >= parseFloat(filterRatingMin));
+    if (filterRatingMax) result = result.filter((e: any) => e.rating <= parseFloat(filterRatingMax));
+    if (filterCompaMin) result = result.filter((e: any) => e.compaRatio >= parseFloat(filterCompaMin));
+    if (filterCompaMax) result = result.filter((e: any) => e.compaRatio <= parseFloat(filterCompaMax));
+    return result;
+  }
+
+  function applySort(list: any[]) {
+    if (!sortBy) return list;
+    return [...list].sort((a, b) => {
+      const av = a[sortBy];
+      const bv = b[sortBy];
+      if (av == null) return 1;
+      if (bv == null) return -1;
+      const cmp = typeof av === 'string' ? av.localeCompare(bv) : av - bv;
+      return sortDir === 'asc' ? cmp : -cmp;
+    });
+  }
+
+  function handleSort(field: string) {
+    if (sortBy === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortBy(field); setSortDir('asc'); }
+  }
+
+  function resetFilters() {
+    setSearchName(''); setFilterDepartment(''); setFilterBand('');
+    setFilterQuadrant(''); setFilterRatingMin(''); setFilterRatingMax('');
+    setFilterCompaMin(''); setFilterCompaMax(''); setSortBy(''); setSortDir('asc');
+  }
+
+  const filteredMatrix = useMemo(() => applySort(applyFilters(matrix)), [matrix, searchName, filterDepartment, filterBand, filterQuadrant, filterRatingMin, filterRatingMax, filterCompaMin, filterCompaMax, sortBy, sortDir]);
+  const filteredPromotion = useMemo(() => applySort(applyFilters(promotionList)), [promotionList, searchName, filterDepartment, filterBand, filterRatingMin, filterRatingMax, filterCompaMin, filterCompaMax, sortBy, sortDir]);
+  const filteredStars = useMemo(() => applySort(applyFilters(gaps.stars)), [gaps.stars, searchName, filterDepartment, filterBand, filterRatingMin, filterRatingMax, filterCompaMin, filterCompaMax, sortBy, sortDir]);
+  const filteredUnder = useMemo(() => applySort(applyFilters(gaps.under)), [gaps.under, searchName, filterDepartment, filterBand, filterRatingMin, filterRatingMax, filterCompaMin, filterCompaMax, sortBy, sortDir]);
 
   const quadrantCounts = matrix.reduce((acc: Record<string, number>, e: any) => {
     acc[e.quadrant] = (acc[e.quadrant] || 0) + 1;
@@ -93,62 +150,12 @@ export default function PerformancePage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Performance Intelligence</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            Analyze pay-performance alignment, promotion readiness, and compensation gaps
-          </p>
-        </div>
-        <button
-          onClick={() => setShowAI(v => !v)}
-          className={cn(
-            'flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors shrink-0',
-            showAI
-              ? 'bg-purple-100 text-purple-700 hover:bg-purple-200 dark:bg-purple-900/30 dark:text-purple-300'
-              : 'bg-purple-600 text-white hover:bg-purple-700'
-          )}
-        >
-          <Sparkles className="w-4 h-4" />
-          {showAI ? 'Hide AI Analysis' : 'AI Analysis'}
-        </button>
+      <div>
+        <h1 className="text-2xl font-bold text-foreground">Performance Intelligence</h1>
+        <p className="text-sm text-muted-foreground mt-0.5">
+          Analyze pay-performance alignment, promotion readiness, and compensation gaps
+        </p>
       </div>
-
-      {/* AI Analysis Panel */}
-      {showAI && (
-        <div className="rounded-xl border border-purple-200 bg-purple-50 dark:bg-purple-900/10 dark:border-purple-800 p-5 space-y-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-purple-600" />
-              <h3 className="text-sm font-semibold text-purple-800 dark:text-purple-300">CompSense AI — Performance Analysis</h3>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => { queryClient.removeQueries({ queryKey: ['performance', 'ai-analysis'] }); queryClient.invalidateQueries({ queryKey: ['performance', 'ai-analysis'] }); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-purple-200 text-purple-700 hover:bg-purple-100 dark:border-purple-700 dark:text-purple-300 transition-colors"
-              >
-                <RefreshCw className="w-3 h-3" />
-                Regenerate
-              </button>
-              <button onClick={() => setShowAI(false)} className="p-1.5 text-purple-600 hover:bg-purple-100 rounded-lg transition-colors">
-                <X className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-          {aiLoading ? (
-            <div className="flex items-center gap-3 py-6 justify-center">
-              <Loader2 className="w-5 h-5 text-purple-600 animate-spin" />
-              <span className="text-sm text-purple-700 dark:text-purple-300">Analyzing performance data with Claude AI…</span>
-            </div>
-          ) : aiNarrative ? (
-            <div className="prose prose-sm max-w-none text-foreground dark:prose-invert">
-              <ReactMarkdown>{aiNarrative}</ReactMarkdown>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">Click Regenerate to generate a fresh analysis.</p>
-          )}
-        </div>
-      )}
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -168,20 +175,147 @@ export default function PerformancePage() {
         ))}
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
-        {tabs.map(tab => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={cn(
-              'px-4 py-2 rounded-md text-sm font-medium transition-colors',
-              activeTab === tab.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+      {/* Tabs + Filter Bar (same row) */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex gap-1 p-1 bg-muted rounded-lg">
+            {tabs.map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                className={cn(
+                  'px-4 py-2 rounded-md text-sm font-medium transition-colors',
+                  activeTab === tab.key ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+                )}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-2 ml-auto">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+              <input
+                type="text"
+                placeholder="Search by name…"
+                value={searchName}
+                onChange={e => setSearchName(e.target.value)}
+                className="w-48 pl-8 pr-3 py-1.5 text-sm rounded-lg border border-border bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <button
+              onClick={() => setShowFilters(v => !v)}
+              className={cn(
+                'flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-lg border transition-colors',
+                showFilters || activeFilterCount > 0
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-background text-muted-foreground hover:text-foreground'
+              )}
+            >
+              <Filter className="w-3.5 h-3.5" />
+              Filters
+              {activeFilterCount > 0 && (
+                <span className="px-1.5 py-0.5 text-xs rounded-full bg-primary text-primary-foreground font-medium">{activeFilterCount}</span>
+              )}
+            </button>
+            {(activeFilterCount > 0 || sortBy) && (
+              <button
+                onClick={resetFilters}
+                className="flex items-center gap-1 px-3 py-1.5 text-sm text-muted-foreground hover:text-foreground rounded-lg border border-border bg-background transition-colors"
+              >
+                <X className="w-3 h-3" />
+                Reset
+              </button>
             )}
-          >
-            {tab.label}
-          </button>
-        ))}
+          </div>
+        </div>
+
+        {showFilters && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 p-3 rounded-xl border border-border bg-muted/30">
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">Department</label>
+              <select
+                value={filterDepartment}
+                onChange={e => setFilterDepartment(e.target.value)}
+                className="text-sm rounded-lg border border-border bg-background text-foreground px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">All</option>
+                {allDepartments.map(d => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">Band</label>
+              <select
+                value={filterBand}
+                onChange={e => setFilterBand(e.target.value)}
+                className="text-sm rounded-lg border border-border bg-background text-foreground px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="">All</option>
+                {allBands.map(b => <option key={b} value={b}>{b}</option>)}
+              </select>
+            </div>
+            {activeTab === 'matrix' && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-medium text-muted-foreground">Quadrant</label>
+                <select
+                  value={filterQuadrant}
+                  onChange={e => setFilterQuadrant(e.target.value)}
+                  className="text-sm rounded-lg border border-border bg-background text-foreground px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="">All</option>
+                  <option value="STAR">Star</option>
+                  <option value="SOLID">Solid</option>
+                  <option value="UNDER">Under</option>
+                  <option value="AVERAGE">Average</option>
+                </select>
+              </div>
+            )}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">Rating (min–max)</label>
+              <div className="flex items-center gap-1">
+                <input type="number" min="1" max="5" step="0.5" placeholder="1" value={filterRatingMin} onChange={e => setFilterRatingMin(e.target.value)} className="w-full text-sm rounded-lg border border-border bg-background text-foreground px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                <span className="text-muted-foreground text-xs">–</span>
+                <input type="number" min="1" max="5" step="0.5" placeholder="5" value={filterRatingMax} onChange={e => setFilterRatingMax(e.target.value)} className="w-full text-sm rounded-lg border border-border bg-background text-foreground px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">Compa-Ratio % (min–max)</label>
+              <div className="flex items-center gap-1">
+                <input type="number" placeholder="0" value={filterCompaMin} onChange={e => setFilterCompaMin(e.target.value)} className="w-full text-sm rounded-lg border border-border bg-background text-foreground px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30" />
+                <span className="text-muted-foreground text-xs">–</span>
+                <input type="number" placeholder="200" value={filterCompaMax} onChange={e => setFilterCompaMax(e.target.value)} className="w-full text-sm rounded-lg border border-border bg-background text-foreground px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30" />
+              </div>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-medium text-muted-foreground">Sort by</label>
+              <div className="flex gap-1">
+                <select
+                  value={sortBy}
+                  onChange={e => { setSortBy(e.target.value); setSortDir('asc'); }}
+                  className="flex-1 text-sm rounded-lg border border-border bg-background text-foreground px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
+                >
+                  <option value="">Default</option>
+                  <option value="name">Name</option>
+                  <option value="band">Band</option>
+                  <option value="department">Department</option>
+                  <option value="rating">Rating</option>
+                  <option value="compaRatio">Compa-Ratio</option>
+                  {activeTab === 'matrix' && <option value="annualCtc">Annual CTC</option>}
+                  {activeTab === 'promotion' && <option value="tenureMonths">Tenure</option>}
+                  {(activeTab === 'promotion' || activeTab === 'gaps') && <option value="annualFixed">Annual Fixed</option>}
+                </select>
+                <button
+                  onClick={() => setSortDir(d => d === 'asc' ? 'desc' : 'asc')}
+                  disabled={!sortBy}
+                  className="p-1.5 rounded-lg border border-border bg-background text-muted-foreground hover:text-foreground disabled:opacity-40 transition-colors"
+                >
+                  {sortDir === 'asc' ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Pay-Performance Matrix */}
@@ -217,13 +351,34 @@ export default function PerformancePage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/50">
-                      {['Employee', 'Band', 'Department', 'Rating', 'Compa-Ratio', 'Annual CTC', 'Quadrant', ''].map(h => (
-                        <th key={h} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">{h}</th>
+                      {[
+                        { label: 'Employee', field: 'name' },
+                        { label: 'Band', field: 'band' },
+                        { label: 'Department', field: 'department' },
+                        { label: 'Rating', field: 'rating' },
+                        { label: 'Compa-Ratio', field: 'compaRatio' },
+                        { label: 'Annual CTC', field: 'annualCtc' },
+                        { label: 'Quadrant', field: 'quadrant' },
+                        { label: '', field: '' },
+                      ].map(({ label, field }) => (
+                        <th
+                          key={label}
+                          onClick={() => field && handleSort(field)}
+                          className={cn('text-left px-4 py-3 text-xs font-medium text-muted-foreground', field && 'cursor-pointer hover:text-foreground select-none')}
+                        >
+                          <span className="inline-flex items-center gap-1">
+                            {label}
+                            {field && (sortBy === field
+                              ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)
+                              : field && <ArrowUpDown className="w-3 h-3 opacity-30" />
+                            )}
+                          </span>
+                        </th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {matrix.map((e: any) => (
+                    {filteredMatrix.map((e: any) => (
                       <tr
                         key={e.id}
                         className="hover:bg-muted/30 transition-colors"
@@ -269,9 +424,9 @@ export default function PerformancePage() {
                     ))}
                   </tbody>
                 </table>
-                {matrix.length === 0 && (
+                {filteredMatrix.length === 0 && (
                   <div className="py-12 text-center">
-                    <p className="text-sm text-muted-foreground">No performance data available</p>
+                    <p className="text-sm text-muted-foreground">{matrix.length === 0 ? 'No performance data available' : 'No employees match the current filters'}</p>
                   </div>
                 )}
               </div>
@@ -292,13 +447,34 @@ export default function PerformancePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
-                    {['Employee', 'Current Band', 'Next Band', 'Rating', 'Compa-Ratio', 'Tenure', 'Annual Fixed', ''].map(h => (
-                      <th key={h} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">{h}</th>
+                    {[
+                      { label: 'Employee', field: 'name' },
+                      { label: 'Current Band', field: 'band' },
+                      { label: 'Next Band', field: 'nextBand' },
+                      { label: 'Rating', field: 'rating' },
+                      { label: 'Compa-Ratio', field: 'compaRatio' },
+                      { label: 'Tenure', field: 'tenureMonths' },
+                      { label: 'Annual Fixed', field: 'annualFixed' },
+                      { label: '', field: '' },
+                    ].map(({ label, field }) => (
+                      <th
+                        key={label}
+                        onClick={() => field && handleSort(field)}
+                        className={cn('text-left px-4 py-3 text-xs font-medium text-muted-foreground', field && 'cursor-pointer hover:text-foreground select-none')}
+                      >
+                        <span className="inline-flex items-center gap-1">
+                          {label}
+                          {field && (sortBy === field
+                            ? (sortDir === 'asc' ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />)
+                            : <ArrowUpDown className="w-3 h-3 opacity-30" />
+                          )}
+                        </span>
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {promotionList.map((e: any) => (
+                  {filteredPromotion.map((e: any) => (
                     <tr
                       key={e.id}
                       className="hover:bg-muted/30 transition-colors"
@@ -341,9 +517,9 @@ export default function PerformancePage() {
                   ))}
                 </tbody>
               </table>
-              {promotionList.length === 0 && (
+              {filteredPromotion.length === 0 && (
                 <div className="py-12 text-center">
-                  <p className="text-sm text-muted-foreground">No employees currently ready for promotion</p>
+                  <p className="text-sm text-muted-foreground">{promotionList.length === 0 ? 'No employees currently ready for promotion' : 'No employees match the current filters'}</p>
                 </div>
               )}
             </div>
@@ -371,13 +547,13 @@ export default function PerformancePage() {
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
                   <h3 className="text-sm font-semibold text-foreground">Stars — High Performers, Below Market</h3>
-                  <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs">{gaps.stars.length}</span>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs">{filteredStars.length}{filteredStars.length !== gaps.stars.length ? ` / ${gaps.stars.length}` : ''}</span>
                 </div>
-                {gaps.stars.length === 0 ? (
-                  <p className="text-sm text-muted-foreground px-2">No employees in this category</p>
+                {filteredStars.length === 0 ? (
+                  <p className="text-sm text-muted-foreground px-2">{gaps.stars.length === 0 ? 'No employees in this category' : 'No employees match the current filters'}</p>
                 ) : (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    {gaps.stars.map((e: any) => (
+                    {filteredStars.map((e: any) => (
                       <div
                         key={e.id}
                         className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-900/20 p-4 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
@@ -416,13 +592,13 @@ export default function PerformancePage() {
                 <div className="flex items-center gap-2 mb-3">
                   <div className="w-2.5 h-2.5 rounded-full bg-red-500" />
                   <h3 className="text-sm font-semibold text-foreground">Under — Low Performers, Above Market</h3>
-                  <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs">{gaps.under.length}</span>
+                  <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs">{filteredUnder.length}{filteredUnder.length !== gaps.under.length ? ` / ${gaps.under.length}` : ''}</span>
                 </div>
-                {gaps.under.length === 0 ? (
-                  <p className="text-sm text-muted-foreground px-2">No employees in this category</p>
+                {filteredUnder.length === 0 ? (
+                  <p className="text-sm text-muted-foreground px-2">{gaps.under.length === 0 ? 'No employees in this category' : 'No employees match the current filters'}</p>
                 ) : (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-                    {gaps.under.map((e: any) => (
+                    {filteredUnder.map((e: any) => (
                       <div
                         key={e.id}
                         className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 p-4 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
