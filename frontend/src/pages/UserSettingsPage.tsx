@@ -33,18 +33,18 @@ export default function UserSettingsPage() {
   const [pwForm, setPwForm] = useState({ current: '', newPw: '', confirm: '' });
   const { user, logout, setUser } = useAuthStore();
   const { theme, applyTheme } = useTheme();
-  const [displayName, setDisplayName] = useState(user?.name ?? '');
+  const [displayName, setDisplayName] = useState('');
   const [savingName, setSavingName] = useState(false);
   const [revokingSessions, setRevokingSessions] = useState(false);
   const nameInitialized = useRef(false);
 
-  // If user loads from the store after mount (edge case), seed the field once
+  // Seed displayName once when user is available — never overwrite user's edits
   useEffect(() => {
-    if (user?.name && !nameInitialized.current) {
+    if (user && user.name && !nameInitialized.current) {
       nameInitialized.current = true;
       setDisplayName(user.name);
     }
-  }, [user?.name]);
+  }, [user]);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -81,7 +81,11 @@ export default function UserSettingsPage() {
       if (setUser) setUser(r.data.data);
       toast.success('Display name updated');
     } catch (err: any) {
-      toast.error(err?.response?.data?.error?.message ?? 'Failed to update name');
+      const status = err?.response?.status;
+      const msg = err?.response?.data?.error?.message;
+      toast.error(
+        status === 500 ? 'Server error — please try again in a moment' : (msg ?? 'Failed to update name')
+      );
     } finally {
       setSavingName(false);
     }
