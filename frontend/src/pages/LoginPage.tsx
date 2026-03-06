@@ -28,7 +28,7 @@ export default function LoginPage() {
     formState: { errors },
   } = useForm<LoginFormData>({
     resolver: zodResolver(loginSchema),
-    defaultValues: { email: 'admin@company.com', password: 'Admin@123' },
+    defaultValues: { email: '', password: '' },
   });
 
   return (
@@ -151,16 +151,6 @@ export default function LoginPage() {
               </button>
             </div>
           </form>
-
-          {/* Demo hint */}
-          <div className="l-f3 mt-8 text-center">
-            <p className="text-xs" style={{ color: 'rgba(255,255,255,0.22)' }}>
-              Demo ·{' '}
-              <span style={{ color: 'rgba(197,255,220,0.6)' }}>admin@company.com</span>
-              {' '}·{' '}
-              <span style={{ color: 'rgba(197,255,220,0.6)' }}>Admin@123</span>
-            </p>
-          </div>
 
           {/* Mobile: show visual elements inline */}
           <div className="flex lg:hidden flex-wrap justify-center gap-2 mt-10">

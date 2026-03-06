@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
+import EmailComposerModal, { type EmailComposerEmployee } from '../components/EmailComposerModal';
 
 const performanceApi = {
   getMatrix: async () => { const r = await api.get('/performance/matrix'); return r.data; },
@@ -51,26 +52,9 @@ function RatingStars({ rating }: { rating: number }) {
 export default function PerformancePage() {
   const [activeTab, setActiveTab] = useState<'matrix' | 'promotion' | 'gaps'>('matrix');
   const [showAI, setShowAI] = useState(false);
-  const [sendingAlert, setSendingAlert] = useState(false);
+  const [emailTarget, setEmailTarget] = useState<EmailComposerEmployee | null>(null);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-
-  const handleSendLowPerformerAlert = async () => {
-    setSendingAlert(true);
-    try {
-      const r = await api.post('/email/low-performer-alert');
-      const { sent, managerCount } = r.data.data;
-      if (sent > 0) {
-        toast.success(`Alerts sent to ${sent} manager(s)`, { description: `${managerCount} manager(s) notified about low performers` });
-      } else {
-        toast.info('No alerts sent', { description: 'SMTP not configured or no managers with low performers found' });
-      }
-    } catch {
-      toast.error('Failed to send alerts');
-    } finally {
-      setSendingAlert(false);
-    }
-  };
 
   const { data: matrixRaw, isLoading: matrixLoading } = useQuery({
     queryKey: ['performance', 'matrix'],
@@ -233,7 +217,7 @@ export default function PerformancePage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-border bg-muted/50">
-                      {['Employee', 'Band', 'Department', 'Rating', 'Compa-Ratio', 'Annual CTC', 'Quadrant'].map(h => (
+                      {['Employee', 'Band', 'Department', 'Rating', 'Compa-Ratio', 'Annual CTC', 'Quadrant', ''].map(h => (
                         <th key={h} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">{h}</th>
                       ))}
                     </tr>
@@ -242,18 +226,17 @@ export default function PerformancePage() {
                     {matrix.map((e: any) => (
                       <tr
                         key={e.id}
-                        className="hover:bg-muted/30 transition-colors cursor-pointer"
-                        onClick={() => navigate(`/employees/${e.id}`)}
+                        className="hover:bg-muted/30 transition-colors"
                       >
-                        <td className="px-4 py-3 font-medium text-foreground">{e.name}</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 font-medium text-foreground cursor-pointer" onClick={() => navigate(`/employees/${e.id}`)}>{e.name}</td>
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => navigate(`/employees/${e.id}`)}>
                           <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', BAND_COLORS[e.band] || 'bg-muted text-muted-foreground')}>
                             {e.band}
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-muted-foreground">{e.department}</td>
-                        <td className="px-4 py-3"><RatingStars rating={Math.round(e.rating)} /></td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 text-muted-foreground cursor-pointer" onClick={() => navigate(`/employees/${e.id}`)}>{e.department}</td>
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => navigate(`/employees/${e.id}`)}><RatingStars rating={Math.round(e.rating)} /></td>
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => navigate(`/employees/${e.id}`)}>
                           <span className={cn(
                             'font-medium',
                             e.compaRatio >= 90 && e.compaRatio <= 110 ? 'text-green-600' : e.compaRatio < 80 ? 'text-red-600' : 'text-orange-600'
@@ -261,8 +244,8 @@ export default function PerformancePage() {
                             {e.compaRatio.toFixed(0)}%
                           </span>
                         </td>
-                        <td className="px-4 py-3 text-foreground">₹{(e.annualCtc / 100000).toFixed(1)}L</td>
-                        <td className="px-4 py-3">
+                        <td className="px-4 py-3 text-foreground cursor-pointer" onClick={() => navigate(`/employees/${e.id}`)}>₹{(e.annualCtc / 100000).toFixed(1)}L</td>
+                        <td className="px-4 py-3 cursor-pointer" onClick={() => navigate(`/employees/${e.id}`)}>
                           <span className={cn(
                             'px-2 py-0.5 rounded-full text-xs font-medium',
                             e.quadrant === 'STAR' ? 'bg-blue-100 text-blue-700' :
@@ -272,6 +255,15 @@ export default function PerformancePage() {
                           )}>
                             {e.quadrant}
                           </span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            onClick={() => setEmailTarget({ name: e.name, department: e.department, band: e.band, rating: e.rating, ctc: e.annualCtc })}
+                            title="Compose email"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                          >
+                            <Mail className="w-3.5 h-3.5" />
+                          </button>
                         </td>
                       </tr>
                     ))}
@@ -300,7 +292,7 @@ export default function PerformancePage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-border bg-muted/50">
-                    {['Employee', 'Current Band', 'Next Band', 'Rating', 'Compa-Ratio', 'Tenure', 'Annual Fixed'].map(h => (
+                    {['Employee', 'Current Band', 'Next Band', 'Rating', 'Compa-Ratio', 'Tenure', 'Annual Fixed', ''].map(h => (
                       <th key={h} className="text-left px-4 py-3 text-xs font-medium text-muted-foreground">{h}</th>
                     ))}
                   </tr>
@@ -309,19 +301,18 @@ export default function PerformancePage() {
                   {promotionList.map((e: any) => (
                     <tr
                       key={e.id}
-                      className="hover:bg-muted/30 transition-colors cursor-pointer"
-                      onClick={() => navigate(`/employees/${e.id}`)}
+                      className="hover:bg-muted/30 transition-colors"
                     >
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 cursor-pointer" onClick={() => navigate(`/employees/${e.id}`)}>
                         <p className="font-medium text-foreground">{e.name}</p>
                         <p className="text-xs text-muted-foreground">{e.department}</p>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 cursor-pointer" onClick={() => navigate(`/employees/${e.id}`)}>
                         <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', BAND_COLORS[e.band] || 'bg-muted text-muted-foreground')}>
                           {e.band}
                         </span>
                       </td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 cursor-pointer" onClick={() => navigate(`/employees/${e.id}`)}>
                         <span className="flex items-center gap-1">
                           <TrendingUp className="w-3 h-3 text-green-500" />
                           <span className={cn('px-2 py-0.5 rounded-full text-xs font-medium', BAND_COLORS[e.nextBand] || 'bg-muted text-muted-foreground')}>
@@ -329,14 +320,23 @@ export default function PerformancePage() {
                           </span>
                         </span>
                       </td>
-                      <td className="px-4 py-3"><RatingStars rating={Math.round(e.rating)} /></td>
-                      <td className="px-4 py-3">
+                      <td className="px-4 py-3 cursor-pointer" onClick={() => navigate(`/employees/${e.id}`)}><RatingStars rating={Math.round(e.rating)} /></td>
+                      <td className="px-4 py-3 cursor-pointer" onClick={() => navigate(`/employees/${e.id}`)}>
                         <span className={cn('font-medium', e.compaRatio >= 90 ? 'text-green-600' : 'text-yellow-600')}>
                           {e.compaRatio.toFixed(0)}%
                         </span>
                       </td>
-                      <td className="px-4 py-3 text-muted-foreground">{e.tenureMonths}mo</td>
-                      <td className="px-4 py-3 font-medium text-foreground">₹{(e.annualFixed / 100000).toFixed(1)}L</td>
+                      <td className="px-4 py-3 text-muted-foreground cursor-pointer" onClick={() => navigate(`/employees/${e.id}`)}>{e.tenureMonths}mo</td>
+                      <td className="px-4 py-3 font-medium text-foreground cursor-pointer" onClick={() => navigate(`/employees/${e.id}`)}>₹{(e.annualFixed / 100000).toFixed(1)}L</td>
+                      <td className="px-4 py-3">
+                        <button
+                          onClick={() => setEmailTarget({ name: e.name, department: e.department, band: e.band, rating: e.rating, ctc: e.annualFixed })}
+                          title="Compose email"
+                          className="p-1.5 rounded-lg text-muted-foreground hover:text-primary hover:bg-primary/10 transition-colors"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -350,6 +350,12 @@ export default function PerformancePage() {
           )}
         </div>
       )}
+
+      <EmailComposerModal
+        open={emailTarget !== null}
+        onClose={() => setEmailTarget(null)}
+        employee={emailTarget ?? undefined}
+      />
 
       {/* Pay Alignment Gaps */}
       {activeTab === 'gaps' && (
@@ -366,14 +372,6 @@ export default function PerformancePage() {
                   <div className="w-2.5 h-2.5 rounded-full bg-blue-500" />
                   <h3 className="text-sm font-semibold text-foreground">Stars — High Performers, Below Market</h3>
                   <span className="px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 text-xs">{gaps.stars.length}</span>
-                  <button
-                    onClick={handleSendLowPerformerAlert}
-                    disabled={sendingAlert}
-                    className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-blue-600 text-white text-xs font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
-                  >
-                    {sendingAlert ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
-                    {sendingAlert ? 'Sending...' : 'Alert Managers'}
-                  </button>
                 </div>
                 {gaps.stars.length === 0 ? (
                   <p className="text-sm text-muted-foreground px-2">No employees in this category</p>
@@ -382,17 +380,25 @@ export default function PerformancePage() {
                     {gaps.stars.map((e: any) => (
                       <div
                         key={e.id}
-                        className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-900/20 p-4 cursor-pointer hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
-                        onClick={() => navigate(`/employees/${e.id}`)}
+                        className="rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-900/20 p-4 hover:bg-blue-100 dark:hover:bg-blue-900/30 transition-colors"
                       >
                         <div className="flex items-start justify-between">
-                          <div>
+                          <div className="cursor-pointer flex-1" onClick={() => navigate(`/employees/${e.id}`)}>
                             <p className="text-sm font-semibold text-foreground">{e.name}</p>
                             <p className="text-xs text-muted-foreground">{e.department} · {e.band}</p>
                           </div>
-                          <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
-                            Retention Risk
-                          </span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-xs font-medium text-blue-700 bg-blue-100 px-2 py-0.5 rounded-full">
+                              Retention Risk
+                            </span>
+                            <button
+                              onClick={ev => { ev.stopPropagation(); setEmailTarget({ name: e.name, department: e.department, band: e.band, rating: e.rating, ctc: e.annualFixed }); }}
+                              title="Compose email"
+                              className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-200 dark:hover:bg-blue-800/40 transition-colors"
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                         <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
                           <span>Rating: <strong className="text-foreground">{e.rating}</strong></span>
@@ -419,17 +425,25 @@ export default function PerformancePage() {
                     {gaps.under.map((e: any) => (
                       <div
                         key={e.id}
-                        className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 p-4 cursor-pointer hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
-                        onClick={() => navigate(`/employees/${e.id}`)}
+                        className="rounded-lg border border-red-200 bg-red-50 dark:bg-red-900/20 p-4 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
                       >
                         <div className="flex items-start justify-between">
-                          <div>
+                          <div className="cursor-pointer flex-1" onClick={() => navigate(`/employees/${e.id}`)}>
                             <p className="text-sm font-semibold text-foreground">{e.name}</p>
                             <p className="text-xs text-muted-foreground">{e.department} · {e.band}</p>
                           </div>
-                          <span className="text-xs font-medium text-red-700 bg-red-100 px-2 py-0.5 rounded-full">
-                            Action Needed
-                          </span>
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="text-xs font-medium text-red-700 bg-red-100 px-2 py-0.5 rounded-full">
+                              Action Needed
+                            </span>
+                            <button
+                              onClick={ev => { ev.stopPropagation(); setEmailTarget({ name: e.name, department: e.department, band: e.band, rating: e.rating, ctc: e.annualFixed }); }}
+                              title="Compose email"
+                              className="p-1.5 rounded-lg text-red-600 hover:bg-red-200 dark:hover:bg-red-800/40 transition-colors"
+                            >
+                              <Mail className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                         <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
                           <span>Rating: <strong className="text-foreground">{e.rating}</strong></span>

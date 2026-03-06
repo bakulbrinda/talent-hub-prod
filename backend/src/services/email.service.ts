@@ -35,6 +35,95 @@ function tableHeader(...headers: string[]): string {
 // ─── Email Service ────────────────────────────────────────────
 export const emailService = {
 
+  // 0. Invite email — sent when admin adds a new user
+  sendInviteEmail: async (to: string, inviteUrl: string): Promise<void> => {
+    const body = `
+      <p style="margin:0 0 16px;color:#4b5563">
+        You've been invited to join <strong>Talent Hub</strong> — your organisation's compensation intelligence platform.
+      </p>
+      <p style="margin:0 0 20px;color:#4b5563">
+        Click the button below to set up your account. This link is valid for <strong>7 days</strong>.
+      </p>
+      <div style="text-align:center;margin:28px 0">
+        <a href="${inviteUrl}"
+           style="background:#4f46e5;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">
+          Set up your account →
+        </a>
+      </div>
+      <p style="margin:0;font-size:12px;color:#9ca3af">
+        Or copy this link into your browser:<br/>
+        <code style="color:#6b7280;word-break:break-all">${inviteUrl}</code>
+      </p>`;
+
+    await sendEmail({
+      to,
+      subject: 'Set up your Talent Hub account',
+      html: emailShell('#4f46e5', 'Welcome to Talent Hub', 'You\'ve been invited', body),
+    });
+  },
+
+  // 0c. Send account credentials email — sent when admin creates account directly
+  sendCredentialsEmail: async (to: string, name: string, email: string, password: string, platformUrl: string): Promise<void> => {
+    const body = `
+      <p style="margin:0 0 16px;color:#4b5563">
+        Hi <strong>${name}</strong>, your <strong>Talent Hub</strong> account has been set up. Here are your login details:
+      </p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:16px 0">
+        <table style="width:100%;font-size:14px;border-collapse:collapse">
+          <tr><td style="color:#6b7280;padding:8px 0;width:120px">Platform URL</td><td style="font-weight:600"><a href="${platformUrl}" style="color:#4f46e5">${platformUrl}</a></td></tr>
+          <tr><td style="color:#6b7280;padding:8px 0">Email (Login ID)</td><td style="font-weight:600">${email}</td></tr>
+          <tr><td style="color:#6b7280;padding:8px 0">Password</td><td style="font-weight:700;color:#4f46e5;font-size:16px;letter-spacing:1px">${password}</td></tr>
+        </table>
+      </div>
+      <p style="margin:0 0 16px;color:#4b5563">Click the button below to log in:</p>
+      <div style="text-align:center;margin:28px 0">
+        <a href="${platformUrl}" style="background:#4f46e5;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">
+          Log in to Talent Hub →
+        </a>
+      </div>
+      <div style="margin-top:20px;padding:12px 16px;background:#fef3c7;border-left:3px solid #f59e0b;border-radius:4px;font-size:12px;color:#92400e">
+        Please change your password after your first login from User Settings → Security.
+      </div>`;
+
+    await sendEmail({
+      to,
+      subject: 'Your Talent Hub account is ready',
+      html: emailShell('#4f46e5', 'Your account is ready', 'Login details for Talent Hub', body),
+    });
+  },
+
+  // 0b. Password reset email — sent when admin generates a reset link
+  sendPasswordResetEmail: async (to: string, resetUrl: string): Promise<void> => {
+    const body = `
+      <p style="margin:0 0 16px;color:#4b5563">
+        A password reset has been requested for your <strong>Talent Hub</strong> account.
+      </p>
+      <p style="margin:0 0 20px;color:#4b5563">
+        Click the button below to set a new password. This link is valid for <strong>7 days</strong>.
+      </p>
+      <div style="text-align:center;margin:28px 0">
+        <a href="${resetUrl}"
+           style="background:#dc2626;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">
+          Reset my password →
+        </a>
+      </div>
+      <p style="margin:0;font-size:12px;color:#9ca3af">
+        If you did not request this reset, ignore this email — your password has not changed.<br/>
+        Or copy this link: <code style="color:#6b7280;word-break:break-all">${resetUrl}</code>
+      </p>`;
+
+    await sendEmail({
+      to,
+      subject: 'Reset your Talent Hub password',
+      html: emailShell('#dc2626', 'Password Reset Request', 'Set a new password for your account', body),
+    });
+  },
+
+  // 0d. Send a custom composed email
+  sendCustomEmail: async (to: string, subject: string, html: string): Promise<void> => {
+    await sendEmail({ to, subject, html });
+  },
+
   // 1. Low performer alert → manager receives email listing direct reports below threshold
   sendLowPerformerAlerts: async (ratingThreshold = 3.0): Promise<{ sent: number; skipped: number; managerCount: number }> => {
     const lowPerformers = await prisma.employee.findMany({

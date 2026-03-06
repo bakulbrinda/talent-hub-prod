@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, BarChart3, Scale, Sparkles, Gift,
   TrendingUp, Award, Zap, FlaskConical, Bell, Settings,
-  ChevronDown, DollarSign, Layers, Building2,
+  ChevronDown, DollarSign, Layers, Building2, Mail,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useNotificationStore } from '../../store/notificationStore';
@@ -82,6 +82,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Settings',
     icon: Settings,
     items: [
+      { path: '/sent-mails', label: 'Sent Mails', icon: Mail },
       { path: '/settings/platform', label: 'Platform Settings', icon: Settings },
       { path: '/settings/user', label: 'User Settings', icon: Users },
     ],

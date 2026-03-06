@@ -22,6 +22,7 @@ model User {
   refreshTokens RefreshToken[]
   scenarios     Scenario[]
   auditLogs     AuditLog[]
+  mailLogs      MailLog[]
 
   @@map("users")
 }
@@ -574,6 +575,23 @@ model AiInsight {
   @@index([insightType])
   @@index([expiresAt])
   @@map("ai_insights")
+}
+
+// ─── Mail Log ───────────────────────────────────────────────────
+
+model MailLog {
+  id             String   @id @default(uuid())
+  sentById       String
+  sentBy         User     @relation(fields: [sentById], references: [id], onDelete: Cascade)
+  recipientEmail String
+  subject        String
+  body           String   @db.Text
+  useCase        String
+  sentAt         DateTime @default(now())
+
+  @@index([sentById])
+  @@index([sentAt])
+  @@map("mail_logs")
 }
 
 // ─── Org Config ────────────────────────────────────────────────

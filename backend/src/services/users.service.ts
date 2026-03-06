@@ -59,6 +59,27 @@ export const usersService = {
 
   // ─── Invite System ─────────────────────────────────────────────
 
+  /** Create a user directly with admin-set credentials */
+  createDirect: async (name: string, email: string, password: string) => {
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      const err = new Error('An account with this email already exists') as any;
+      err.statusCode = 409;
+      throw err;
+    }
+    const hashed = await bcrypt.hash(password, 12);
+    const user = await prisma.user.create({
+      data: { name: name.trim(), email: email.trim().toLowerCase(), password: hashed },
+      select: { id: true, email: true, name: true, isActive: true },
+    });
+    // Mark any pending invite for this email as used
+    await prisma.userInvite.updateMany({
+      where: { email: user.email, usedAt: null },
+      data: { usedAt: new Date() },
+    });
+    return user;
+  },
+
   /** Generate a password-reset link for an existing user */
   generateResetToken: async (userId: string) => {
     const user = await prisma.user.findUnique({ where: { id: userId } });
@@ -159,13 +180,20 @@ export const usersService = {
     return user;
   },
 
-  /** List pending (unused) invites */
+  /** List pending (unused) invites — excludes invites for users that already have accounts */
   getPendingInvites: async () => {
-    return prisma.userInvite.findMany({
+    const invites = await prisma.userInvite.findMany({
       where: { usedAt: null, expiresAt: { gt: new Date() } },
       orderBy: { createdAt: 'desc' },
-      select: { id: true, email: true, role: true, expiresAt: true, createdAt: true },
+      select: { id: true, email: true, expiresAt: true, createdAt: true },
     });
+    if (invites.length === 0) return invites;
+    const existingUsers = await prisma.user.findMany({
+      where: { email: { in: invites.map(i => i.email) } },
+      select: { email: true },
+    });
+    const existingEmails = new Set(existingUsers.map(u => u.email));
+    return invites.filter(i => !existingEmails.has(i.email));
   },
 
   /** Revoke (delete) an invite */

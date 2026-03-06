@@ -6,6 +6,7 @@
 import { Router, Request, Response } from 'express';
 import { authenticate } from '../middleware/authenticate';
 import { usersService } from '../services/users.service';
+import { emailService } from '../services/email.service';
 import { logAction } from '../services/auditLog.service';
 import logger from '../lib/logger';
 
@@ -17,6 +18,40 @@ const router = Router();
 router.get('/', authenticate, async (req: Request, res: Response) => {
   const users = await usersService.getAll();
   res.json({ data: users });
+});
+
+/** POST /api/users/create — create a user directly with admin-set credentials */
+router.post('/create', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'name, email, and password are required' } });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Password must be at least 8 characters' } });
+    }
+    const user = await usersService.createDirect(name, email, password);
+    await logAction({ userId: req.user!.userId, action: 'USER_CREATED', entityType: 'User', entityId: user.id, ip: req.ip });
+    logger.info(`[Users] Created account for ${email}`);
+    res.status(201).json({ data: user });
+  } catch (err: any) {
+    res.status(err.statusCode || 500).json({ error: { code: err.statusCode === 409 ? 'CONFLICT' : 'INTERNAL', message: err.message } });
+  }
+});
+
+/** POST /api/users/send-credentials — email login details to a newly created user */
+router.post('/send-credentials', authenticate, async (req: Request, res: Response) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!name || !email || !password) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'name, email, and password are required' } });
+    }
+    const platformUrl = process.env.APP_URL || req.headers.origin || 'http://localhost:3001';
+    await emailService.sendCredentialsEmail(email, name, email, password, platformUrl);
+    res.json({ data: { sent: true } });
+  } catch (err: any) {
+    res.status(500).json({ error: { code: 'INTERNAL', message: err.message } });
+  }
 });
 
 /** PATCH /api/users/:id/deactivate — soft-deactivate a user */
@@ -48,10 +83,16 @@ router.patch('/:id/reactivate', authenticate, async (req: Request, res: Response
 router.post('/:id/reset-password', authenticate, async (req: Request, res: Response) => {
   try {
     const { token, email } = await usersService.generateResetToken(req.params.id);
-    const origin = req.headers.origin || 'http://localhost:3001';
+    const origin = process.env.APP_URL || req.headers.origin || 'http://localhost:3001';
     const resetUrl = `${origin}/invite/${token}`;
     await logAction({ userId: req.user!.userId, action: 'USER_RESET_PASSWORD', entityType: 'User', entityId: req.params.id, ip: req.ip });
     logger.info(`[Reset] Generated reset link for ${email}`);
+
+    // Send reset email (non-blocking)
+    emailService.sendPasswordResetEmail(email, resetUrl).catch(err =>
+      logger.warn(`[Reset] Email send failed for ${email}: ${err.message}`)
+    );
+
     res.json({ data: { resetUrl } });
   } catch (err: any) {
     res.status(err.statusCode || 500).json({ error: { code: 'INTERNAL', message: err.message } });
@@ -83,11 +124,16 @@ router.post('/invite', authenticate, async (req: Request, res: Response) => {
     }
 
     const invite = await usersService.createInvite(email, 'ADMIN', req.user!.userId);
-    const origin = req.headers.origin || 'http://localhost:3001';
+    const origin = process.env.APP_URL || req.headers.origin || 'http://localhost:3001';
     const inviteUrl = `${origin}/invite/${invite.token}`;
 
     await logAction({ userId: req.user!.userId, action: 'USER_INVITED', entityType: 'UserInvite', entityId: invite.id, metadata: { email }, ip: req.ip });
     logger.info(`[Invite] Created invite for ${email}`);
+
+    // Send invite email (non-blocking — don't fail the request if SMTP is unconfigured)
+    emailService.sendInviteEmail(email, inviteUrl).catch(err =>
+      logger.warn(`[Invite] Email send failed for ${email}: ${err.message}`)
+    );
 
     res.json({
       data: { id: invite.id, email: invite.email, expiresAt: invite.expiresAt, inviteUrl },

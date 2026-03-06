@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Settings, Database, Bell, Key, RefreshCw, CheckCircle, XCircle,
-  Mail, Users, UserPlus, Copy, Trash2, UserX, UserCheck, KeyRound, Loader2,
+  Mail, Users, UserPlus, Copy, Trash2, UserX, UserCheck, KeyRound, Loader2, Eye, EyeOff,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
@@ -21,9 +21,14 @@ export default function PlatformSettingsPage() {
   const [triggeringScan, setTriggeringScan] = useState(false);
 
   // Users tab state
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteLoading, setInviteLoading] = useState(false);
-  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [directForm, setDirectForm] = useState({ name: '', email: '', password: '' });
+  const [directLoading, setDirectLoading] = useState(false);
+  const [createdCreds, setCreatedCreds] = useState<{ name: string; email: string; password: string } | null>(() => {
+    try { const s = sessionStorage.getItem('th:lastCreatedCreds'); return s ? JSON.parse(s) : null; } catch { return null; }
+  });
+  const [sendingCreds, setSendingCreds] = useState(false);
+  const [showCredsPassword, setShowCredsPassword] = useState(false);
+
   const [resetUrls, setResetUrls] = useState<Record<string, string>>({});
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
 
@@ -54,11 +59,15 @@ export default function PlatformSettingsPage() {
     queryKey: ['platform-users'],
     queryFn: async () => { const r = await api.get('/users'); return r.data; },
     enabled: activeTab === 'users',
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
   const { data: pendingInvitesRaw } = useQuery({
     queryKey: ['platform-invites'],
     queryFn: async () => { const r = await api.get('/users/invites'); return r.data; },
     enabled: activeTab === 'users',
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
   const { data: orgConfigRaw } = useQuery({
     queryKey: ['org-config'],
@@ -93,20 +102,35 @@ export default function PlatformSettingsPage() {
 
   // ─── Handlers ─────────────────────────────────────────────────
 
-  const handleInvite = async () => {
-    if (!inviteEmail.trim()) return;
-    setInviteLoading(true);
-    setInviteUrl(null);
+  const handleCreateDirect = async () => {
+    if (!directForm.name.trim() || !directForm.email.trim() || directForm.password.length < 8) return;
+    setDirectLoading(true);
     try {
-      const r = await api.post('/users/invite', { email: inviteEmail });
-      setInviteUrl(r.data.data.inviteUrl);
-      setInviteEmail('');
+      await api.post('/users/create', directForm);
+      const creds = { ...directForm };
+      sessionStorage.setItem('th:lastCreatedCreds', JSON.stringify(creds));
+      setCreatedCreds(creds);
+      setDirectForm({ name: '', email: '', password: '' });
+      qc.invalidateQueries({ queryKey: ['platform-users'] });
       qc.invalidateQueries({ queryKey: ['platform-invites'] });
-      toast.success('Invite created — share the link below');
+      toast.success('Account created');
     } catch (err: any) {
-      toast.error(err.response?.data?.error?.message || 'Failed to create invite');
+      toast.error(err.response?.data?.error?.message || 'Failed to create account');
     } finally {
-      setInviteLoading(false);
+      setDirectLoading(false);
+    }
+  };
+
+  const handleSendCreds = async () => {
+    if (!createdCreds) return;
+    setSendingCreds(true);
+    try {
+      await api.post('/users/send-credentials', createdCreds);
+      toast.success('Login details sent', { description: `Email sent to ${createdCreds.email}` });
+    } catch {
+      toast.error('Failed to send email — check SMTP config');
+    } finally {
+      setSendingCreds(false);
     }
   };
 
@@ -335,40 +359,52 @@ export default function PlatformSettingsPage() {
                   <UserPlus className="w-4 h-4 text-primary" />
                   <h3 className="text-sm font-semibold text-foreground">Add a Team Member</h3>
                 </div>
-                <div className="flex items-end gap-3">
-                  <div className="flex-1">
-                    <label className="text-xs font-medium text-muted-foreground">Email address</label>
-                    <input
-                      type="email"
-                      value={inviteEmail}
-                      onChange={e => { setInviteEmail(e.target.value); setInviteUrl(null); }}
-                      placeholder="colleague@company.com"
-                      className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    />
-                  </div>
-                  <button
-                    onClick={handleInvite}
-                    disabled={inviteLoading || !inviteEmail.trim()}
-                    className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                  >
-                    {inviteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
-                    Send invite
-                  </button>
-                </div>
-                {inviteUrl && (
-                  <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-green-700 dark:text-green-400 mb-1">Share this setup link with your colleague:</p>
-                      <code className="text-xs text-green-800 dark:text-green-300 break-all">{inviteUrl}</code>
+
+                <div className="space-y-3">
+                    <p className="text-xs text-muted-foreground">Create an account and share the credentials directly with your colleague.</p>
+                    <div className="grid grid-cols-1 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">Full name</label>
+                        <input
+                          type="text"
+                          value={directForm.name}
+                          onChange={e => setDirectForm(f => ({ ...f, name: e.target.value }))}
+                          placeholder="Jane Smith"
+                          className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">Email address (login ID)</label>
+                        <input
+                          type="email"
+                          value={directForm.email}
+                          onChange={e => setDirectForm(f => ({ ...f, email: e.target.value }))}
+                          placeholder="jane@company.com"
+                          className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs font-medium text-muted-foreground">Password</label>
+                        <input
+                          type="text"
+                          value={directForm.password}
+                          onChange={e => setDirectForm(f => ({ ...f, password: e.target.value }))}
+                          placeholder="Min 8 characters"
+                          className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                        <p className="text-[10px] text-muted-foreground mt-1">Share these credentials with the user out-of-band (message, call, etc.)</p>
+                      </div>
                     </div>
                     <button
-                      onClick={() => { navigator.clipboard.writeText(inviteUrl); toast.success('Link copied!'); }}
-                      className="flex-shrink-0 p-2 rounded-lg hover:bg-green-100 dark:hover:bg-green-900/30 transition-colors"
+                      onClick={handleCreateDirect}
+                      disabled={directLoading || !directForm.name.trim() || !directForm.email.trim() || directForm.password.length < 8}
+                      className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
                     >
-                      <Copy className="w-4 h-4 text-green-600" />
+                      {directLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                      {directLoading ? 'Creating…' : 'Create account'}
                     </button>
+
                   </div>
-                )}
               </div>
 
               {/* Users table */}
@@ -387,10 +423,18 @@ export default function PlatformSettingsPage() {
                           {u.name.slice(0, 2).toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-foreground truncate">
+                          <p className="text-sm font-medium text-foreground flex items-center gap-1.5 flex-wrap">
                             {u.name}
-                            {u.id === me?.id && <span className="text-xs text-muted-foreground ml-1">(you)</span>}
-                            {!u.isActive && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">Inactive</span>}
+                            {u.id === me?.id && <span className="text-xs text-muted-foreground">(you)</span>}
+                            <span className={cn(
+                              'text-[10px] px-1.5 py-0.5 rounded font-medium',
+                              u.role === 'ADMIN' ? 'bg-primary/10 text-primary' :
+                              u.role === 'HR_MANAGER' ? 'bg-blue-100 text-blue-700' :
+                              'bg-muted text-muted-foreground'
+                            )}>
+                              {u.role === 'ADMIN' ? 'Admin' : u.role === 'HR_MANAGER' ? 'HR Manager' : 'Viewer'}
+                            </span>
+                            {!u.isActive && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">Inactive</span>}
                           </p>
                           <p className="text-xs text-muted-foreground truncate">{u.email}</p>
                           {u.lastLoginAt && (
@@ -454,6 +498,51 @@ export default function PlatformSettingsPage() {
                             className="flex-shrink-0 p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
                           >
                             <Copy className="w-3.5 h-3.5 text-amber-600" />
+                          </button>
+                        </div>
+                      )}
+                      {/* Credentials strip — shown for the last-created user until dismissed */}
+                      {createdCreds && u.email === createdCreds.email && (
+                        <div className="ml-12 mt-1 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10 p-3 space-y-2">
+                          <div className="flex items-center justify-between mb-1">
+                            <p className="text-[10px] font-semibold text-green-700 dark:text-green-400">Account credentials — share with user</p>
+                            <button
+                              onClick={() => { sessionStorage.removeItem('th:lastCreatedCreds'); setCreatedCreds(null); }}
+                              className="text-[10px] text-muted-foreground hover:text-foreground"
+                            >
+                              Dismiss
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs">
+                            {[
+                              { label: 'Email', value: createdCreds.email },
+                            ].map(row => (
+                              <div key={row.label} className="flex items-center gap-1.5 bg-white dark:bg-muted/30 rounded-lg px-2.5 py-1.5 border border-green-100 dark:border-green-800">
+                                <span className="text-muted-foreground">{row.label}:</span>
+                                <span className="font-medium text-foreground">{row.value}</span>
+                                <button onClick={() => { navigator.clipboard.writeText(row.value); toast.success('Copied!'); }} className="text-muted-foreground hover:text-foreground">
+                                  <Copy className="w-3 h-3" />
+                                </button>
+                              </div>
+                            ))}
+                            <div className="flex items-center gap-1.5 bg-white dark:bg-muted/30 rounded-lg px-2.5 py-1.5 border border-green-100 dark:border-green-800">
+                              <span className="text-muted-foreground">Password:</span>
+                              <span className="font-medium text-foreground font-mono">{showCredsPassword ? createdCreds.password : '••••••••'}</span>
+                              <button onClick={() => setShowCredsPassword(s => !s)} className="text-muted-foreground hover:text-foreground">
+                                {showCredsPassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                              </button>
+                              <button onClick={() => { navigator.clipboard.writeText(createdCreds.password); toast.success('Password copied!'); }} className="text-muted-foreground hover:text-foreground">
+                                <Copy className="w-3 h-3" />
+                              </button>
+                            </div>
+                          </div>
+                          <button
+                            onClick={handleSendCreds}
+                            disabled={sendingCreds}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-[11px] font-medium hover:bg-green-700 disabled:opacity-50 transition-colors"
+                          >
+                            {sendingCreds ? <Loader2 className="w-3 h-3 animate-spin" /> : <Mail className="w-3 h-3" />}
+                            {sendingCreds ? 'Sending…' : `Send login details by email`}
                           </button>
                         </div>
                       )}
