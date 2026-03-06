@@ -52,11 +52,11 @@ wait_for_port() {
 }
 
 wait_for_port 3001 "backend"
-wait_for_port 5173 "frontend"
+wait_for_port 5179 "frontend"
 
 echo ""
 echo "🚀  Talent Hub is running."
-echo "   App  →  http://localhost:5173"
+echo "   App  →  http://localhost:5179"
 echo "   API  →  http://localhost:3001/api"
 echo ""
 echo "Run ./stop.sh to shut down."
