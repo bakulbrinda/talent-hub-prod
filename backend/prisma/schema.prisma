@@ -15,6 +15,8 @@ model User {
   password      String
   name          String
   role          UserRole       @default(ADMIN)
+  isActive      Boolean        @default(true)
+  lastLoginAt   DateTime?
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
   refreshTokens RefreshToken[]
@@ -572,4 +574,22 @@ model AiInsight {
   @@index([insightType])
   @@index([expiresAt])
   @@map("ai_insights")
+}
+
+// ─── Org Config ────────────────────────────────────────────────
+
+model OrgConfig {
+  id                   String   @id @default("singleton")
+  orgName              String   @default("Talent Hub")
+  fiscalYearStartMonth Int      @default(4)
+  currencySymbol       String   @default("₹")
+  hrAlertEmails        String[] @default([])
+  aiScanEnabled        Boolean  @default(true)
+  aiScanFrequencyMins  Int      @default(60)
+  anomalyCompaThreshold Float   @default(75.0)
+  rsuReminderDays      Int      @default(30)
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  @@map("org_config")
 }

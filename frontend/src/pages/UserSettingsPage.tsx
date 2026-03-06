@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { User, Lock, Palette, Monitor, Sun, Moon, LogOut } from 'lucide-react';
+import { User, Lock, Palette, Monitor, Sun, Moon, LogOut, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { useAuthStore } from '../store/authStore';
@@ -31,8 +31,14 @@ export default function UserSettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [changingPassword, setChangingPassword] = useState(false);
   const [pwForm, setPwForm] = useState({ current: '', newPw: '', confirm: '' });
-  const { user, logout } = useAuthStore();
+  const [displayName, setDisplayName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+  const [revokingSessions, setRevokingSessions] = useState(false);
+  const { user, logout, setUser } = useAuthStore();
   const { theme, applyTheme } = useTheme();
+
+  // init displayName from user once
+  if (user && !displayName) setDisplayName(user.name);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -61,6 +67,33 @@ export default function UserSettingsPage() {
     }
   };
 
+  const handleSaveName = async () => {
+    if (!displayName.trim()) return;
+    setSavingName(true);
+    try {
+      const r = await api.patch('/auth/me', { name: displayName.trim() });
+      if (setUser) setUser(r.data.data);
+      toast.success('Display name updated');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error?.message ?? 'Failed to update name');
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const handleRevokeAllSessions = async () => {
+    setRevokingSessions(true);
+    try {
+      await api.delete('/auth/sessions');
+      toast.success('All sessions revoked', { description: 'You will be logged out.' });
+      setTimeout(() => logout(), 1500);
+    } catch {
+      toast.error('Failed to revoke sessions');
+    } finally {
+      setRevokingSessions(false);
+    }
+  };
+
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
     { key: 'profile',    label: 'Profile',    icon: User    },
     { key: 'security',   label: 'Security',   icon: Lock    },
@@ -69,7 +102,6 @@ export default function UserSettingsPage() {
 
   const sessionInfo = {
     lastLogin: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-    role: user?.role ?? 'VIEWER',
     email: user?.email ?? '—',
   };
 
@@ -129,12 +161,6 @@ export default function UserSettingsPage() {
                   <div>
                     <p className="text-sm font-semibold text-foreground">{user?.name ?? '—'}</p>
                     <p className="text-xs text-muted-foreground">{user?.email ?? '—'}</p>
-                    <span className={cn(
-                      'mt-1 inline-block px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide',
-                      user?.role === 'ADMIN' ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'
-                    )}>
-                      {user?.role ?? 'VIEWER'}
-                    </span>
                   </div>
                 </div>
 
@@ -144,7 +170,8 @@ export default function UserSettingsPage() {
                     <label className="text-xs font-medium text-muted-foreground">Display Name</label>
                     <input
                       type="text"
-                      defaultValue={user?.name ?? ''}
+                      value={displayName}
+                      onChange={e => setDisplayName(e.target.value)}
                       className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
@@ -161,8 +188,13 @@ export default function UserSettingsPage() {
                 </div>
 
                 <div className="flex gap-3 pt-1">
-                  <button className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
-                    Save Changes
+                  <button
+                    onClick={handleSaveName}
+                    disabled={savingName || !displayName.trim() || displayName === user?.name}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  >
+                    {savingName && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    {savingName ? 'Saving…' : 'Save Changes'}
                   </button>
                 </div>
               </div>
@@ -174,7 +206,6 @@ export default function UserSettingsPage() {
                   {[
                     { label: 'Current Session', value: 'Active' },
                     { label: 'Last Login',       value: sessionInfo.lastLogin },
-                    { label: 'Role',             value: sessionInfo.role },
                   ].map(item => (
                     <div key={item.label} className="flex justify-between p-2.5 rounded-lg bg-muted/30">
                       <span className="text-muted-foreground">{item.label}</span>
@@ -188,6 +219,7 @@ export default function UserSettingsPage() {
 
           {/* SECURITY */}
           {activeTab === 'security' && (
+            <div className="space-y-4">
             <div className="rounded-xl border border-border bg-card p-5 space-y-5">
               <h3 className="text-sm font-semibold text-foreground">Change Password</h3>
               <p className="text-xs text-muted-foreground -mt-2">
@@ -242,10 +274,28 @@ export default function UserSettingsPage() {
                   disabled={changingPassword || !pwForm.current || !pwForm.newPw || !pwForm.confirm}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
-                  {changingPassword && <div className="w-3.5 h-3.5 border-2 border-primary-foreground border-t-transparent rounded-full animate-spin" />}
-                  {changingPassword ? 'Changing...' : 'Change Password'}
+                  {changingPassword && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  {changingPassword ? 'Changing…' : 'Change Password'}
                 </button>
               </form>
+            </div>
+
+            <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+              <div>
+                <h3 className="text-sm font-semibold text-foreground">Active Sessions</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Log out from all devices — use this if you suspect unauthorised access.
+                </p>
+              </div>
+              <button
+                onClick={handleRevokeAllSessions}
+                disabled={revokingSessions}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg border border-red-300 text-red-600 text-sm font-medium hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-50 transition-colors"
+              >
+                {revokingSessions ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LogOut className="w-3.5 h-3.5" />}
+                {revokingSessions ? 'Revoking…' : 'Log out all devices'}
+              </button>
+            </div>
             </div>
           )}
 

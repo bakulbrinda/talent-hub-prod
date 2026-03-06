@@ -1,28 +1,213 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Settings, Database, Bell, Key, RefreshCw, CheckCircle, XCircle, Mail, Users, UserPlus, Copy, Trash2 } from 'lucide-react';
+import {
+  Settings, Database, Bell, Key, RefreshCw, CheckCircle, XCircle,
+  Mail, Users, UserPlus, Copy, Trash2, UserX, UserCheck, KeyRound, Loader2,
+} from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
 import { useAuthStore } from '../store/authStore';
 
-type Tab = 'general' | 'api' | 'data' | 'notifications' | 'email' | 'users';
+type Tab = 'users' | 'org' | 'notifications' | 'data' | 'api' | 'email';
 
 export default function PlatformSettingsPage() {
-  const [activeTab, setActiveTab] = useState<Tab>('general');
+  const [activeTab, setActiveTab] = useState<Tab>('users');
   const [testing, setTesting] = useState(false);
   const [apiStatus, setApiStatus] = useState<'unknown' | 'ok' | 'error'>('unknown');
   const [exportLoading, setExportLoading] = useState('');
-  const [emailSending, setEmailSending] = useState<string>('');
+  const [emailSending, setEmailSending] = useState('');
+  const [clearingCache, setClearingCache] = useState(false);
+  const [triggeringScan, setTriggeringScan] = useState(false);
 
   // Users tab state
   const [inviteEmail, setInviteEmail] = useState('');
-  const [inviteRole, setInviteRole] = useState<'HR_MANAGER' | 'VIEWER' | 'ADMIN'>('HR_MANAGER');
   const [inviteLoading, setInviteLoading] = useState(false);
   const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+  const [resetUrls, setResetUrls] = useState<Record<string, string>>({});
+  const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+
+  // Org tab state
+  const [orgSaving, setOrgSaving] = useState(false);
+  const [orgForm, setOrgForm] = useState<{
+    orgName: string;
+    fiscalYearStartMonth: number;
+    currencySymbol: string;
+    hrAlertEmails: string;
+  } | null>(null);
+
+  // Notifications tab state
+  const [notifSaving, setNotifSaving] = useState(false);
+  const [notifForm, setNotifForm] = useState<{
+    aiScanEnabled: boolean;
+    aiScanFrequencyMins: number;
+    anomalyCompaThreshold: number;
+    rsuReminderDays: number;
+  } | null>(null);
 
   const qc = useQueryClient();
   const { user: me } = useAuthStore();
+
+  // ─── Queries ──────────────────────────────────────────────────
+
+  const { data: usersRaw } = useQuery({
+    queryKey: ['platform-users'],
+    queryFn: async () => { const r = await api.get('/users'); return r.data; },
+    enabled: activeTab === 'users',
+  });
+  const { data: pendingInvitesRaw } = useQuery({
+    queryKey: ['platform-invites'],
+    queryFn: async () => { const r = await api.get('/users/invites'); return r.data; },
+    enabled: activeTab === 'users',
+  });
+  const { data: orgConfigRaw } = useQuery({
+    queryKey: ['org-config'],
+    queryFn: async () => { const r = await api.get('/settings/org'); return r.data; },
+    enabled: activeTab === 'org' || activeTab === 'notifications',
+  });
+  const { data: healthRaw } = useQuery({
+    queryKey: ['health'],
+    queryFn: async () => { const r = await api.get('/health'); return r.data; },
+    retry: false,
+  });
+
+  const platformUsers: any[] = (usersRaw as any)?.data ?? [];
+  const pendingInvites: any[] = (pendingInvitesRaw as any)?.data ?? [];
+  const orgConfig: any = (orgConfigRaw as any)?.data ?? null;
+
+  // Seed form state from config when loaded
+  if (orgConfig && orgForm === null) {
+    setOrgForm({
+      orgName: orgConfig.orgName,
+      fiscalYearStartMonth: orgConfig.fiscalYearStartMonth,
+      currencySymbol: orgConfig.currencySymbol,
+      hrAlertEmails: (orgConfig.hrAlertEmails || []).join(', '),
+    });
+    setNotifForm({
+      aiScanEnabled: orgConfig.aiScanEnabled,
+      aiScanFrequencyMins: orgConfig.aiScanFrequencyMins,
+      anomalyCompaThreshold: orgConfig.anomalyCompaThreshold,
+      rsuReminderDays: orgConfig.rsuReminderDays,
+    });
+  }
+
+  // ─── Handlers ─────────────────────────────────────────────────
+
+  const handleInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    setInviteLoading(true);
+    setInviteUrl(null);
+    try {
+      const r = await api.post('/users/invite', { email: inviteEmail });
+      setInviteUrl(r.data.data.inviteUrl);
+      setInviteEmail('');
+      qc.invalidateQueries({ queryKey: ['platform-invites'] });
+      toast.success('Invite created — share the link below');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || 'Failed to create invite');
+    } finally {
+      setInviteLoading(false);
+    }
+  };
+
+  const setLoading = (userId: string, key: string, val: boolean) => {
+    setActionLoading(prev => ({ ...prev, [`${userId}:${key}`]: val }));
+  };
+  const isLoading = (userId: string, key: string) => !!actionLoading[`${userId}:${key}`];
+
+  const handleDeactivate = async (userId: string) => {
+    setLoading(userId, 'deactivate', true);
+    try {
+      await api.patch(`/users/${userId}/deactivate`);
+      qc.invalidateQueries({ queryKey: ['platform-users'] });
+      toast.success('User deactivated');
+    } catch {
+      toast.error('Failed to deactivate user');
+    } finally {
+      setLoading(userId, 'deactivate', false);
+    }
+  };
+
+  const handleReactivate = async (userId: string) => {
+    setLoading(userId, 'reactivate', true);
+    try {
+      await api.patch(`/users/${userId}/reactivate`);
+      qc.invalidateQueries({ queryKey: ['platform-users'] });
+      toast.success('User reactivated');
+    } catch {
+      toast.error('Failed to reactivate user');
+    } finally {
+      setLoading(userId, 'reactivate', false);
+    }
+  };
+
+  const handleResetPassword = async (userId: string) => {
+    setLoading(userId, 'reset', true);
+    try {
+      const r = await api.post(`/users/${userId}/reset-password`);
+      setResetUrls(prev => ({ ...prev, [userId]: r.data.data.resetUrl }));
+      toast.success('Reset link generated — share with the user');
+    } catch {
+      toast.error('Failed to generate reset link');
+    } finally {
+      setLoading(userId, 'reset', false);
+    }
+  };
+
+  const handleDeleteUser = async (userId: string) => {
+    setLoading(userId, 'delete', true);
+    try {
+      await api.delete(`/users/${userId}`);
+      qc.invalidateQueries({ queryKey: ['platform-users'] });
+      toast.success('User removed');
+    } catch {
+      toast.error('Failed to remove user');
+    } finally {
+      setLoading(userId, 'delete', false);
+    }
+  };
+
+  const handleRevokeInvite = async (inviteId: string) => {
+    try {
+      await api.delete(`/users/invites/${inviteId}`);
+      qc.invalidateQueries({ queryKey: ['platform-invites'] });
+      toast.success('Invite revoked');
+    } catch {
+      toast.error('Failed to revoke invite');
+    }
+  };
+
+  const handleSaveOrg = async () => {
+    if (!orgForm) return;
+    setOrgSaving(true);
+    try {
+      const emails = orgForm.hrAlertEmails
+        .split(',')
+        .map(e => e.trim())
+        .filter(Boolean);
+      await api.patch('/settings/org', { ...orgForm, hrAlertEmails: emails });
+      qc.invalidateQueries({ queryKey: ['org-config'] });
+      toast.success('Organisation settings saved');
+    } catch {
+      toast.error('Failed to save settings');
+    } finally {
+      setOrgSaving(false);
+    }
+  };
+
+  const handleSaveNotif = async () => {
+    if (!notifForm) return;
+    setNotifSaving(true);
+    try {
+      await api.patch('/settings/org', notifForm);
+      qc.invalidateQueries({ queryKey: ['org-config'] });
+      toast.success('Notification settings saved');
+    } catch {
+      toast.error('Failed to save settings');
+    } finally {
+      setNotifSaving(false);
+    }
+  };
 
   const handleSendEmail = async (endpoint: string, label: string) => {
     setEmailSending(endpoint);
@@ -40,12 +225,6 @@ export default function PlatformSettingsPage() {
       setEmailSending('');
     }
   };
-
-  const { data: healthRaw } = useQuery({
-    queryKey: ['health'],
-    queryFn: async () => { const r = await api.get('/health'); return r.data; },
-    retry: false,
-  });
 
   const testClaudeApi = async () => {
     setTesting(true);
@@ -73,87 +252,55 @@ export default function PlatformSettingsPage() {
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Export failed', err);
+    } catch {
+      toast.error('Export failed');
     } finally {
       setExportLoading('');
     }
   };
 
-  const { data: usersRaw } = useQuery({
-    queryKey: ['platform-users'],
-    queryFn: async () => { const r = await api.get('/users'); return r.data; },
-    enabled: activeTab === 'users',
-  });
-  const { data: pendingInvitesRaw } = useQuery({
-    queryKey: ['platform-invites'],
-    queryFn: async () => { const r = await api.get('/users/invites'); return r.data; },
-    enabled: activeTab === 'users',
-  });
-  const platformUsers: any[] = (usersRaw as any)?.data ?? [];
-  const pendingInvites: any[] = (pendingInvitesRaw as any)?.data ?? [];
-
-  const handleInvite = async () => {
-    if (!inviteEmail.trim()) return;
-    setInviteLoading(true);
-    setInviteUrl(null);
+  const handleClearCache = async () => {
+    setClearingCache(true);
     try {
-      const r = await api.post('/users/invite', { email: inviteEmail, role: inviteRole });
-      setInviteUrl(r.data.data.inviteUrl);
-      setInviteEmail('');
-      qc.invalidateQueries({ queryKey: ['platform-invites'] });
-      toast.success('Invite created — share the link below');
-    } catch (err: any) {
-      toast.error(err.response?.data?.error?.message || 'Failed to create invite');
+      await api.post('/settings/cache/clear');
+      toast.success('AI cache cleared', { description: 'Next insight request will re-run Claude analysis' });
+    } catch {
+      toast.error('Failed to clear cache');
     } finally {
-      setInviteLoading(false);
+      setClearingCache(false);
     }
   };
 
-  const handleRoleChange = async (userId: string, role: string) => {
+  const handleTriggerScan = async () => {
+    setTriggeringScan(true);
     try {
-      await api.patch(`/users/${userId}/role`, { role });
-      qc.invalidateQueries({ queryKey: ['platform-users'] });
-      toast.success('Role updated');
+      await api.post('/notifications/trigger-scan');
+      toast.success('AI scan triggered', { description: 'Results will appear in Notifications' });
     } catch {
-      toast.error('Failed to update role');
+      toast.error('Failed to trigger scan');
+    } finally {
+      setTriggeringScan(false);
     }
   };
 
-  const handleDeleteUser = async (userId: string) => {
-    try {
-      await api.delete(`/users/${userId}`);
-      qc.invalidateQueries({ queryKey: ['platform-users'] });
-      toast.success('User removed');
-    } catch {
-      toast.error('Failed to remove user');
-    }
-  };
-
-  const handleRevokeInvite = async (inviteId: string) => {
-    try {
-      await api.delete(`/users/invites/${inviteId}`);
-      qc.invalidateQueries({ queryKey: ['platform-invites'] });
-      toast.success('Invite revoked');
-    } catch {
-      toast.error('Failed to revoke invite');
-    }
-  };
+  // ─── Tabs ──────────────────────────────────────────────────────
 
   const tabs: { key: Tab; label: string; icon: React.ElementType }[] = [
-    { key: 'general',       label: 'General',          icon: Settings  },
-    { key: 'users',         label: 'Users & Roles',    icon: Users     },
-    { key: 'api',           label: 'API Connections',  icon: Key       },
-    { key: 'data',          label: 'Data Management',  icon: Database  },
-    { key: 'notifications', label: 'Notifications',    icon: Bell      },
-    { key: 'email',         label: 'Email (SMTP)',      icon: Mail      },
+    { key: 'users',         label: 'User Management',    icon: Users    },
+    { key: 'org',           label: 'Organisation',        icon: Settings },
+    { key: 'notifications', label: 'Notifications',       icon: Bell     },
+    { key: 'data',          label: 'Data',                icon: Database },
+    { key: 'api',           label: 'API Connections',     icon: Key      },
+    { key: 'email',         label: 'Email (SMTP)',        icon: Mail     },
   ];
+
+  const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-foreground">Platform Settings</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">Admin-only: company configuration, API connections and integrations</p>
+        <p className="text-sm text-muted-foreground mt-0.5">Company configuration and administration</p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-5">
@@ -179,51 +326,14 @@ export default function PlatformSettingsPage() {
         {/* Content */}
         <div className="lg:col-span-3">
 
-          {/* GENERAL */}
-          {activeTab === 'general' && (
-            <div className="rounded-xl border border-border bg-card p-5 space-y-5">
-              <h3 className="text-sm font-semibold text-foreground">General Configuration</h3>
-              <div className="grid grid-cols-1 gap-4">
-                {[
-                  { label: 'Company Name',     value: 'TechCorp India Pvt. Ltd.', readonly: false },
-                  { label: 'Currency',          value: 'INR (₹)',                  readonly: false },
-                  { label: 'Fiscal Year Start', value: 'April',                    readonly: false },
-                  { label: 'Platform Version',  value: '2.0.0',                    readonly: true  },
-                ].map(field => (
-                  <div key={field.label}>
-                    <label className="text-xs font-medium text-muted-foreground">{field.label}</label>
-                    <input
-                      type="text"
-                      defaultValue={field.value}
-                      readOnly={field.readonly}
-                      className={cn(
-                        'mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm',
-                        'focus:outline-none focus:ring-2 focus:ring-primary/20',
-                        field.readonly && 'opacity-60 cursor-not-allowed',
-                      )}
-                    />
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-3 pt-2">
-                <button className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors">
-                  Save Changes
-                </button>
-                <button className="px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground transition-colors">
-                  Reset to Defaults
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* USERS & ROLES */}
+          {/* USER MANAGEMENT */}
           {activeTab === 'users' && (
             <div className="space-y-5">
-              {/* Invite new user */}
+              {/* Add user */}
               <div className="rounded-xl border border-border bg-card p-5 space-y-4">
                 <div className="flex items-center gap-2">
                   <UserPlus className="w-4 h-4 text-primary" />
-                  <h3 className="text-sm font-semibold text-foreground">Invite a Team Member</h3>
+                  <h3 className="text-sm font-semibold text-foreground">Add a Team Member</h3>
                 </div>
                 <div className="flex items-end gap-3">
                   <div className="flex-1">
@@ -236,31 +346,19 @@ export default function PlatformSettingsPage() {
                       className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
                   </div>
-                  <div className="w-36">
-                    <label className="text-xs font-medium text-muted-foreground">Role</label>
-                    <select
-                      value={inviteRole}
-                      onChange={e => setInviteRole(e.target.value as typeof inviteRole)}
-                      className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                    >
-                      <option value="VIEWER">Viewer</option>
-                      <option value="HR_MANAGER">HR Manager</option>
-                      <option value="ADMIN">Admin</option>
-                    </select>
-                  </div>
                   <button
                     onClick={handleInvite}
                     disabled={inviteLoading || !inviteEmail.trim()}
                     className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
                   >
-                    {inviteLoading ? <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" /> : <UserPlus className="w-4 h-4" />}
-                    Invite
+                    {inviteLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                    Send invite
                   </button>
                 </div>
                 {inviteUrl && (
                   <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-200 dark:border-green-800">
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs font-medium text-green-700 dark:text-green-400 mb-1">Invite link (share with your colleague):</p>
+                      <p className="text-xs font-medium text-green-700 dark:text-green-400 mb-1">Share this setup link with your colleague:</p>
                       <code className="text-xs text-green-800 dark:text-green-300 break-all">{inviteUrl}</code>
                     </div>
                     <button
@@ -273,39 +371,92 @@ export default function PlatformSettingsPage() {
                 )}
               </div>
 
-              {/* Current users */}
+              {/* Users table */}
               <div className="rounded-xl border border-border bg-card overflow-hidden">
                 <div className="px-5 py-3 border-b border-border bg-muted/20">
                   <h3 className="text-sm font-semibold text-foreground">Team Members ({platformUsers.length})</h3>
                 </div>
                 <div className="divide-y divide-border">
                   {platformUsers.map((u: any) => (
-                    <div key={u.id} className="flex items-center gap-4 px-5 py-3">
-                      <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
-                        {u.name.slice(0, 2).toUpperCase()}
+                    <div key={u.id} className="px-5 py-3 space-y-2">
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          'w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0',
+                          u.isActive ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
+                        )}>
+                          {u.name.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-foreground truncate">
+                            {u.name}
+                            {u.id === me?.id && <span className="text-xs text-muted-foreground ml-1">(you)</span>}
+                            {!u.isActive && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">Inactive</span>}
+                          </p>
+                          <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                          {u.lastLoginAt && (
+                            <p className="text-[10px] text-muted-foreground">
+                              Last login: {new Date(u.lastLoginAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-1">
+                          {/* Reset password */}
+                          <button
+                            onClick={() => handleResetPassword(u.id)}
+                            disabled={isLoading(u.id, 'reset')}
+                            title="Generate reset link"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors disabled:opacity-30"
+                          >
+                            {isLoading(u.id, 'reset') ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                          </button>
+                          {/* Deactivate / Reactivate */}
+                          {u.id !== me?.id && (
+                            u.isActive ? (
+                              <button
+                                onClick={() => handleDeactivate(u.id)}
+                                disabled={isLoading(u.id, 'deactivate')}
+                                title="Deactivate user"
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-orange-500 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors disabled:opacity-30"
+                              >
+                                {isLoading(u.id, 'deactivate') ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserX className="w-3.5 h-3.5" />}
+                              </button>
+                            ) : (
+                              <button
+                                onClick={() => handleReactivate(u.id)}
+                                disabled={isLoading(u.id, 'reactivate')}
+                                title="Reactivate user"
+                                className="p-1.5 rounded-lg text-muted-foreground hover:text-green-500 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors disabled:opacity-30"
+                              >
+                                {isLoading(u.id, 'reactivate') ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserCheck className="w-3.5 h-3.5" />}
+                              </button>
+                            )
+                          )}
+                          {/* Delete */}
+                          <button
+                            onClick={() => handleDeleteUser(u.id)}
+                            disabled={u.id === me?.id || isLoading(u.id, 'delete')}
+                            title="Remove user"
+                            className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-30"
+                          >
+                            {isLoading(u.id, 'delete') ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground truncate">{u.name} {u.id === me?.id && <span className="text-xs text-muted-foreground">(you)</span>}</p>
-                        <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                      </div>
-                      <select
-                        value={u.role}
-                        onChange={e => handleRoleChange(u.id, e.target.value)}
-                        disabled={u.id === me?.id}
-                        className="px-2 py-1 rounded-lg border border-border bg-background text-xs focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        <option value="VIEWER">Viewer</option>
-                        <option value="HR_MANAGER">HR Manager</option>
-                        <option value="ADMIN">Admin</option>
-                      </select>
-                      <button
-                        onClick={() => handleDeleteUser(u.id)}
-                        disabled={u.id === me?.id}
-                        className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                        title="Remove user"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {/* Reset URL display */}
+                      {resetUrls[u.id] && (
+                        <div className="flex items-center gap-2 p-2 rounded-lg bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800 ml-12">
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[10px] font-medium text-amber-700 dark:text-amber-400 mb-0.5">Reset link (expires in 7 days):</p>
+                            <code className="text-[10px] text-amber-800 dark:text-amber-300 break-all">{resetUrls[u.id]}</code>
+                          </div>
+                          <button
+                            onClick={() => { navigator.clipboard.writeText(resetUrls[u.id]); toast.success('Link copied!'); }}
+                            className="flex-shrink-0 p-1.5 rounded-lg hover:bg-amber-100 dark:hover:bg-amber-900/30 transition-colors"
+                          >
+                            <Copy className="w-3.5 h-3.5 text-amber-600" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -323,7 +474,7 @@ export default function PlatformSettingsPage() {
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-foreground truncate">{inv.email}</p>
                           <p className="text-xs text-muted-foreground">
-                            {inv.role} · Expires {new Date(inv.expiresAt).toLocaleDateString()}
+                            Expires {new Date(inv.expiresAt).toLocaleDateString()}
                           </p>
                         </div>
                         <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
@@ -341,6 +492,227 @@ export default function PlatformSettingsPage() {
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* ORGANISATION */}
+          {activeTab === 'org' && (
+            <div className="rounded-xl border border-border bg-card p-5 space-y-5">
+              <h3 className="text-sm font-semibold text-foreground">Organisation Configuration</h3>
+              {!orgForm ? (
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin" />Loading…
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-1 gap-4">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Organisation Name</label>
+                      <input
+                        type="text"
+                        value={orgForm.orgName}
+                        onChange={e => setOrgForm(f => f && ({ ...f, orgName: e.target.value }))}
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Fiscal Year Start Month</label>
+                      <select
+                        value={orgForm.fiscalYearStartMonth}
+                        onChange={e => setOrgForm(f => f && ({ ...f, fiscalYearStartMonth: Number(e.target.value) }))}
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      >
+                        {MONTHS.map((m, i) => (
+                          <option key={m} value={i + 1}>{m}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Default Currency Symbol</label>
+                      <input
+                        type="text"
+                        value={orgForm.currencySymbol}
+                        onChange={e => setOrgForm(f => f && ({ ...f, currencySymbol: e.target.value }))}
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        maxLength={5}
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">HR Alert Email Recipients</label>
+                      <input
+                        type="text"
+                        value={orgForm.hrAlertEmails}
+                        onChange={e => setOrgForm(f => f && ({ ...f, hrAlertEmails: e.target.value }))}
+                        placeholder="hr@company.com, lead@company.com"
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-1">Comma-separated list of emails that receive anomaly alerts</p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleSaveOrg}
+                    disabled={orgSaving}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  >
+                    {orgSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    {orgSaving ? 'Saving…' : 'Save Changes'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* NOTIFICATIONS */}
+          {activeTab === 'notifications' && (
+            <div className="rounded-xl border border-border bg-card p-5 space-y-5">
+              <h3 className="text-sm font-semibold text-foreground">Notifications & Alerts</h3>
+              {!notifForm ? (
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin" />Loading…
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between py-2 border-b border-border">
+                      <div>
+                        <p className="text-sm font-medium text-foreground">Proactive AI Scan</p>
+                        <p className="text-xs text-muted-foreground">Automatically scan for pay anomalies on a schedule</p>
+                      </div>
+                      <button
+                        onClick={() => setNotifForm(f => f && ({ ...f, aiScanEnabled: !f.aiScanEnabled }))}
+                        className={cn(
+                          'relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer',
+                          notifForm.aiScanEnabled ? 'bg-primary' : 'bg-muted',
+                        )}
+                      >
+                        <span className={cn(
+                          'inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-sm',
+                          notifForm.aiScanEnabled ? 'translate-x-4' : 'translate-x-1',
+                        )} />
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Scan Frequency</label>
+                      <select
+                        value={notifForm.aiScanFrequencyMins}
+                        onChange={e => setNotifForm(f => f && ({ ...f, aiScanFrequencyMins: Number(e.target.value) }))}
+                        disabled={!notifForm.aiScanEnabled}
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50"
+                      >
+                        <option value={30}>Every 30 minutes</option>
+                        <option value={60}>Every 1 hour</option>
+                        <option value={120}>Every 2 hours</option>
+                        <option value={360}>Every 6 hours</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Pay Anomaly Compa-Ratio Threshold (%)</label>
+                      <input
+                        type="number"
+                        min={50} max={100}
+                        value={notifForm.anomalyCompaThreshold}
+                        onChange={e => setNotifForm(f => f && ({ ...f, anomalyCompaThreshold: Number(e.target.value) }))}
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-1">Alert when employee compa-ratio falls below this value</p>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">RSU Vesting Reminder Lead Time (days)</label>
+                      <input
+                        type="number"
+                        min={1} max={365}
+                        value={notifForm.rsuReminderDays}
+                        onChange={e => setNotifForm(f => f && ({ ...f, rsuReminderDays: Number(e.target.value) }))}
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                      <p className="text-[10px] text-muted-foreground mt-1">Send RSU reminder email this many days before vesting</p>
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={handleSaveNotif}
+                    disabled={notifSaving}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                  >
+                    {notifSaving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                    {notifSaving ? 'Saving…' : 'Save Changes'}
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* DATA */}
+          {activeTab === 'data' && (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-border bg-card p-5 space-y-4">
+                <h3 className="text-sm font-semibold text-foreground">Export Data</h3>
+                <div className="grid grid-cols-1 gap-3">
+                  {[
+                    { label: 'Employees CSV',    desc: 'Export all active employee data',            endpoint: 'employees/csv',    icon: '👥' },
+                    { label: 'Employees JSON',   desc: 'Full employee data with all fields',          endpoint: 'employees/json',   icon: '📄' },
+                    { label: 'Pay Equity Data',  desc: 'Gender pay gap and compa-ratio data',         endpoint: 'pay-equity/json',  icon: '⚖️' },
+                    { label: 'Salary Bands CSV', desc: 'All salary band configurations',              endpoint: 'salary-bands/csv', icon: '📊' },
+                  ].map(item => (
+                    <div key={item.label} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                      <div className="flex items-center gap-3">
+                        <span className="text-xl">{item.icon}</span>
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{item.label}</p>
+                          <p className="text-xs text-muted-foreground">{item.desc}</p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => handleExport(item.endpoint)}
+                        disabled={exportLoading === item.endpoint}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-background transition-colors disabled:opacity-50"
+                      >
+                        {exportLoading === item.endpoint
+                          ? <Loader2 className="w-3 h-3 animate-spin" />
+                          : <span>↓</span>}
+                        {exportLoading === item.endpoint ? 'Exporting…' : 'Export'}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border bg-card p-5 space-y-3">
+                <h3 className="text-sm font-semibold text-foreground">Actions</h3>
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Trigger AI Scan Now</p>
+                      <p className="text-xs text-muted-foreground">Manually run the proactive anomaly scan</p>
+                    </div>
+                    <button
+                      onClick={handleTriggerScan}
+                      disabled={triggeringScan}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                    >
+                      {triggeringScan ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+                      {triggeringScan ? 'Running…' : 'Run scan'}
+                    </button>
+                  </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
+                    <div>
+                      <p className="text-sm font-medium text-foreground">Clear AI Insight Cache</p>
+                      <p className="text-xs text-muted-foreground">Bust Redis <code className="bg-muted px-1 rounded">ai:*</code> and <code className="bg-muted px-1 rounded">dashboard:*</code> keys</p>
+                    </div>
+                    <button
+                      onClick={handleClearCache}
+                      disabled={clearingCache}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-background transition-colors disabled:opacity-50"
+                    >
+                      {clearingCache ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                      {clearingCache ? 'Clearing…' : 'Clear cache'}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -387,101 +759,6 @@ export default function PlatformSettingsPage() {
                   <code className="text-xs text-muted-foreground ml-auto">claude-sonnet-4-6</code>
                 </div>
               </div>
-
-              <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-                <h3 className="text-sm font-semibold text-foreground">Database</h3>
-                <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50">
-                  <CheckCircle className="w-4 h-4 text-green-500" />
-                  <span className="text-sm text-green-700 dark:text-green-400">PostgreSQL connected</span>
-                  <code className="text-xs text-muted-foreground ml-auto">Neon (cloud)</code>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* DATA MANAGEMENT */}
-          {activeTab === 'data' && (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-                <h3 className="text-sm font-semibold text-foreground">Export Data</h3>
-                <div className="grid grid-cols-1 gap-3">
-                  {[
-                    { label: 'Employees CSV',    desc: 'Export all active employee data',            endpoint: 'employees/csv',    icon: '👥' },
-                    { label: 'Employees JSON',   desc: 'Full employee data with all fields',          endpoint: 'employees/json',   icon: '📄' },
-                    { label: 'Pay Equity Data',  desc: 'Gender pay gap and compa-ratio data',         endpoint: 'pay-equity/json',  icon: '⚖️' },
-                    { label: 'Salary Bands CSV', desc: 'All salary band configurations',              endpoint: 'salary-bands/csv', icon: '📊' },
-                  ].map(item => (
-                    <div key={item.label} className="flex items-center justify-between p-3 rounded-lg bg-muted/50">
-                      <div className="flex items-center gap-3">
-                        <span className="text-xl">{item.icon}</span>
-                        <div>
-                          <p className="text-sm font-medium text-foreground">{item.label}</p>
-                          <p className="text-xs text-muted-foreground">{item.desc}</p>
-                        </div>
-                      </div>
-                      <button
-                        onClick={() => handleExport(item.endpoint)}
-                        disabled={exportLoading === item.endpoint}
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:bg-background transition-colors disabled:opacity-50"
-                      >
-                        {exportLoading === item.endpoint
-                          ? <div className="w-3 h-3 border border-primary border-t-transparent rounded-full animate-spin" />
-                          : <span>&#8595;</span>}
-                        {exportLoading === item.endpoint ? 'Exporting...' : 'Export'}
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-                <h3 className="text-sm font-semibold text-foreground">Database Info</h3>
-                <div className="grid grid-cols-2 gap-3 text-sm">
-                  {[
-                    { label: 'Environment', value: 'Development'   },
-                    { label: 'Database',    value: 'PostgreSQL 15' },
-                    { label: 'ORM',         value: 'Prisma 5.x'   },
-                    { label: 'Cache',       value: 'Redis 7'       },
-                  ].map(item => (
-                    <div key={item.label} className="flex justify-between p-2 rounded-lg bg-muted/30">
-                      <span className="text-muted-foreground">{item.label}</span>
-                      <span className="font-medium text-foreground">{item.value}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* NOTIFICATIONS */}
-          {activeTab === 'notifications' && (
-            <div className="rounded-xl border border-border bg-card p-5 space-y-5">
-              <h3 className="text-sm font-semibold text-foreground">Notification Thresholds</h3>
-              <div className="space-y-4">
-                {[
-                  { label: 'Pay Anomaly Alert',      desc: 'Trigger when employee salary falls outside band',  on: true  },
-                  { label: 'Budget Threshold Alert', desc: 'Alert when department spend exceeds % of budget',   on: true  },
-                  { label: 'RSU Vesting Reminder',   desc: 'Notify 30 days before RSU vesting date',            on: true  },
-                  { label: 'Compa-Ratio Warning',    desc: 'Alert when compa-ratio drops below 80%',             on: true  },
-                  { label: 'New Hire Parity Check',  desc: 'Check new hire pay against existing employees',      on: false },
-                ].map(notif => (
-                  <div key={notif.label} className="flex items-center justify-between py-2 border-b border-border last:border-0">
-                    <div>
-                      <p className="text-sm font-medium text-foreground">{notif.label}</p>
-                      <p className="text-xs text-muted-foreground">{notif.desc}</p>
-                    </div>
-                    <div className={cn(
-                      'relative inline-flex h-5 w-9 items-center rounded-full transition-colors cursor-pointer',
-                      notif.on ? 'bg-primary' : 'bg-muted',
-                    )}>
-                      <span className={cn(
-                        'inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform shadow-sm',
-                        notif.on ? 'translate-x-4' : 'translate-x-1',
-                      )} />
-                    </div>
-                  </div>
-                ))}
-              </div>
             </div>
           )}
 
@@ -492,7 +769,7 @@ export default function PlatformSettingsPage() {
                 <div>
                   <h3 className="text-sm font-semibold text-foreground">SMTP Configuration</h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
-                    Configure outbound email. Set these values in <code className="bg-muted px-1 rounded">backend/.env</code> — they are not editable at runtime.
+                    Configure in <code className="bg-muted px-1 rounded">backend/.env</code> — not editable at runtime.
                   </p>
                 </div>
                 <div className="grid grid-cols-1 gap-3">
@@ -516,9 +793,6 @@ export default function PlatformSettingsPage() {
                     </div>
                   ))}
                 </div>
-                <p className="text-xs text-muted-foreground bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
-                  These fields are read-only here. Edit <code>backend/.env</code> and restart the server to apply changes.
-                </p>
               </div>
 
               <div className="rounded-xl border border-border bg-card p-5 space-y-4">
@@ -543,9 +817,9 @@ export default function PlatformSettingsPage() {
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors shrink-0"
                       >
                         {emailSending === item.endpoint
-                          ? <div className="w-3 h-3 border border-primary-foreground border-t-transparent rounded-full animate-spin" />
+                          ? <Loader2 className="w-3 h-3 animate-spin" />
                           : <Mail className="w-3 h-3" />}
-                        {emailSending === item.endpoint ? 'Sending...' : 'Send'}
+                        {emailSending === item.endpoint ? 'Sending…' : 'Send'}
                       </button>
                     </div>
                   ))}

@@ -20,7 +20,7 @@ export default function AcceptInvitePage() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
 
-  const [invite, setInvite] = useState<{ email: string; role: string; expiresAt: string } | null>(null);
+  const [invite, setInvite] = useState<{ email: string; expiresAt: string; userExists: boolean } | null>(null);
   const [loading, setLoading] = useState(true);
   const [invalid, setInvalid] = useState(false);
 
@@ -46,38 +46,38 @@ export default function AcceptInvitePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || password.length < 8) return;
+    const isReset = invite?.userExists;
+    if (!isReset && !name.trim()) return;
+    if (password.length < 8) return;
 
     setSubmitting(true);
     setError(null);
 
     try {
-      const res = await fetch('/api/users/accept-invite', {
+      const endpoint = isReset ? '/api/users/apply-reset' : '/api/users/accept-invite';
+      const body = isReset
+        ? { token, password }
+        : { token, name, password };
+
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, name, password }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error?.message || 'Failed to create account');
+        setError(data.error?.message || (isReset ? 'Failed to reset password' : 'Failed to create account'));
         return;
       }
 
       setSuccess(true);
-      // Auto-redirect to login after 2.5 seconds
       setTimeout(() => navigate('/login'), 2500);
     } catch {
       setError('Network error — please try again');
     } finally {
       setSubmitting(false);
     }
-  };
-
-  const ROLE_LABEL: Record<string, string> = {
-    ADMIN: 'Administrator',
-    HR_MANAGER: 'HR Manager',
-    VIEWER: 'Viewer',
   };
 
   return (
@@ -117,7 +117,9 @@ export default function AcceptInvitePage() {
         {!loading && success && (
           <div className="rounded-xl border border-green-200 bg-green-50 dark:bg-green-900/10 p-6 text-center space-y-2">
             <CheckCircle className="w-10 h-10 text-green-500 mx-auto" />
-            <p className="font-semibold text-green-700 dark:text-green-400">Account Created!</p>
+            <p className="font-semibold text-green-700 dark:text-green-400">
+              {invite?.userExists ? 'Password Reset!' : 'Account Created!'}
+            </p>
             <p className="text-sm text-muted-foreground">Redirecting to login…</p>
           </div>
         )}
@@ -125,33 +127,37 @@ export default function AcceptInvitePage() {
         {!loading && invite && !success && (
           <div className="rounded-xl border border-border bg-card shadow-sm p-6 space-y-5">
             <div className="space-y-1">
-              <h1 className="text-lg font-bold text-foreground">You've been invited!</h1>
+              <h1 className="text-lg font-bold text-foreground">
+                {invite.userExists ? 'Set a new password' : "You've been invited!"}
+              </h1>
               <p className="text-sm text-muted-foreground">
-                Set up your account for <strong className="text-foreground">{invite.email}</strong>
+                {invite.userExists
+                  ? <>Reset password for <strong className="text-foreground">{invite.email}</strong></>
+                  : <>Set up your account for <strong className="text-foreground">{invite.email}</strong></>
+                }
               </p>
-              <span className="inline-block text-xs px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                {ROLE_LABEL[invite.role] || invite.role}
-              </span>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                  Your full name
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={name}
-                  onChange={e => setName(e.target.value)}
-                  placeholder="Jane Smith"
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
+              {!invite.userExists && (
+                <div>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1.5">
+                    Your full name
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={e => setName(e.target.value)}
+                    placeholder="Jane Smith"
+                    className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-medium text-muted-foreground mb-1.5">
-                  Create a password
+                  {invite.userExists ? 'New password' : 'Create a password'}
                 </label>
                 <div className="relative">
                   <input
@@ -179,15 +185,15 @@ export default function AcceptInvitePage() {
 
               <button
                 type="submit"
-                disabled={submitting || !name.trim() || password.length < 8}
+                disabled={submitting || (!invite.userExists && !name.trim()) || password.length < 8}
                 className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 disabled:opacity-50 transition-colors"
               >
                 {submitting ? (
                   <span className="flex items-center justify-center gap-2">
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Creating account…
+                    {invite.userExists ? 'Resetting…' : 'Creating account…'}
                   </span>
-                ) : 'Create account & sign in'}
+                ) : invite.userExists ? 'Set new password' : 'Create account & sign in'}
               </button>
             </form>
           </div>

@@ -66,4 +66,33 @@ export const authController = {
       next(err);
     }
   },
+
+  async updateMe(req: Request, res: Response, next: NextFunction) {
+    try {
+      const { name } = req.body;
+      if (!name) return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'name is required' } });
+      const user = await authService.updateName(req.user!.userId, name);
+      res.json({ data: user });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async getSessions(req: Request, res: Response, next: NextFunction) {
+    try {
+      const sessions = await authService.getSessions(req.user!.userId);
+      res.json({ data: sessions });
+    } catch (err) {
+      next(err);
+    }
+  },
+
+  async revokeAllSessions(req: Request, res: Response, next: NextFunction) {
+    try {
+      const result = await authService.revokeAllSessions(req.user!.userId);
+      res.json({ data: result });
+    } catch (err) {
+      next(err);
+    }
+  },
 };

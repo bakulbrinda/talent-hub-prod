@@ -14,6 +14,8 @@ export const authService = {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) throw unauthorized('Invalid email or password');
 
+    if (!user.isActive) throw unauthorized('Your account has been deactivated. Contact your admin.');
+
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) throw unauthorized('Invalid email or password');
 
@@ -35,9 +37,15 @@ export const authService = {
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    await prisma.refreshToken.create({
-      data: { token: refreshToken, userId: user.id, expiresAt },
-    });
+    await Promise.all([
+      prisma.refreshToken.create({
+        data: { token: refreshToken, userId: user.id, expiresAt },
+      }),
+      prisma.user.update({
+        where: { id: user.id },
+        data: { lastLoginAt: new Date() },
+      }),
+    ]);
 
     return { accessToken, refreshToken, user: authUser };
   },
@@ -100,5 +108,29 @@ export const authService = {
     });
 
     return { id: user.id, email: user.email, name: user.name, role: user.role };
+  },
+
+  async updateName(userId: string, name: string) {
+    const trimmed = name.trim();
+    if (!trimmed) throw badRequest('Name cannot be empty');
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { name: trimmed },
+      select: { id: true, email: true, name: true, role: true },
+    });
+    return user;
+  },
+
+  async getSessions(userId: string) {
+    return prisma.refreshToken.findMany({
+      where: { userId, expiresAt: { gt: new Date() } },
+      select: { id: true, createdAt: true, expiresAt: true },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
+  async revokeAllSessions(userId: string) {
+    await prisma.refreshToken.deleteMany({ where: { userId } });
+    return { message: 'All sessions revoked. Please log in again.' };
   },
 };
