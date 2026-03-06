@@ -31,6 +31,7 @@ export default function PlatformSettingsPage() {
 
   const [resetUrls, setResetUrls] = useState<Record<string, string>>({});
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
 
   // Org tab state
   const [orgSaving, setOrgSaving] = useState(false);
@@ -477,7 +478,7 @@ export default function PlatformSettingsPage() {
                           )}
                           {/* Delete */}
                           <button
-                            onClick={() => handleDeleteUser(u.id)}
+                            onClick={() => setDeleteConfirm({ id: u.id, name: u.name })}
                             disabled={u.id === me?.id || isLoading(u.id, 'delete')}
                             title="Remove user"
                             className="p-1.5 rounded-lg text-muted-foreground hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-30"
@@ -919,6 +920,60 @@ export default function PlatformSettingsPage() {
 
         </div>
       </div>
+
+      {/* Delete confirmation dialog */}
+      {deleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setDeleteConfirm(null)} />
+          <div className="relative bg-card border border-border rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center shrink-0 mt-0.5">
+                <Trash2 className="w-4 h-4 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-semibold text-foreground">Delete user account?</h3>
+                <p className="text-sm text-muted-foreground mt-1">
+                  You are about to permanently delete <span className="font-medium text-foreground">{deleteConfirm.name}</span>.
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10 p-3 text-sm text-red-700 dark:text-red-400 space-y-1">
+              <p className="font-medium">This action cannot be undone. It will:</p>
+              <ul className="list-disc list-inside space-y-0.5 text-xs mt-1">
+                <li>Permanently remove the user account and all access rights</li>
+                <li>Immediately revoke all active login sessions</li>
+                <li>Delete any pending invite or password-reset tokens</li>
+              </ul>
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              If you only want to temporarily block access, use <span className="font-medium">Deactivate</span> instead.
+            </p>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                onClick={() => setDeleteConfirm(null)}
+                className="px-4 py-2 rounded-lg border border-border text-sm text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const { id } = deleteConfirm;
+                  setDeleteConfirm(null);
+                  await handleDeleteUser(id);
+                }}
+                disabled={isLoading(deleteConfirm.id, 'delete')}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 disabled:opacity-50 transition-colors"
+              >
+                {isLoading(deleteConfirm.id, 'delete') ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                Yes, delete permanently
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

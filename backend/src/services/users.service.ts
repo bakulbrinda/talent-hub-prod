@@ -52,8 +52,15 @@ export const usersService = {
     });
   },
 
-  /** Delete a user */
+  /** Permanently delete a user — revokes all sessions and removes the record */
   delete: async (userId: string) => {
+    // Revoke all active sessions first so the user is immediately logged out
+    await prisma.refreshToken.deleteMany({ where: { userId } });
+    // Clean up any pending invite/reset tokens tied to this user's email
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
+    if (user) {
+      await prisma.userInvite.deleteMany({ where: { email: user.email } });
+    }
     return prisma.user.delete({ where: { id: userId } });
   },
 

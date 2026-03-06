@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { User, Lock, Palette, Monitor, Sun, Moon, LogOut, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
@@ -31,14 +31,20 @@ export default function UserSettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('profile');
   const [changingPassword, setChangingPassword] = useState(false);
   const [pwForm, setPwForm] = useState({ current: '', newPw: '', confirm: '' });
-  const [displayName, setDisplayName] = useState('');
-  const [savingName, setSavingName] = useState(false);
-  const [revokingSessions, setRevokingSessions] = useState(false);
   const { user, logout, setUser } = useAuthStore();
   const { theme, applyTheme } = useTheme();
+  const [displayName, setDisplayName] = useState(user?.name ?? '');
+  const [savingName, setSavingName] = useState(false);
+  const [revokingSessions, setRevokingSessions] = useState(false);
+  const nameInitialized = useRef(false);
 
-  // init displayName from user once
-  if (user && !displayName) setDisplayName(user.name);
+  // If user loads from the store after mount (edge case), seed the field once
+  useEffect(() => {
+    if (user?.name && !nameInitialized.current) {
+      nameInitialized.current = true;
+      setDisplayName(user.name);
+    }
+  }, [user?.name]);
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault();
