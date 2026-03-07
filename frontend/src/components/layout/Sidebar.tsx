@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, BarChart3, Scale, Sparkles, Gift,
   TrendingUp, Award, Zap, FlaskConical, Bell, Settings,
-  ChevronDown, DollarSign, Layers, Building2, Mail,
+  ChevronDown, DollarSign, Layers, Building2, Mail, Database,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useNotificationStore } from '../../store/notificationStore';
@@ -66,6 +66,14 @@ const NAV_GROUPS: NavGroup[] = [
       { path: '/employees', label: 'Employees', icon: Users },
       { path: '/job-architecture', label: 'Job Architecture', icon: Layers },
       { path: '/performance', label: 'Performance', icon: TrendingUp },
+    ],
+  },
+  {
+    id: 'data',
+    label: 'Data Center',
+    icon: Database,
+    items: [
+      { path: '/data-center', label: 'Data Center', icon: Database },
     ],
   },
   {

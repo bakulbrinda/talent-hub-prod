@@ -3,14 +3,13 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import {
   Search, Filter, Users, TrendingUp, TrendingDown, Minus,
-  UserPlus, Upload, Pencil, AlertCircle, RefreshCw, FileSpreadsheet, Sparkles, Trash2
+  UserPlus, Pencil, AlertCircle, RefreshCw, FileSpreadsheet, Sparkles, Trash2
 } from 'lucide-react';
 import { employeeService, EmployeeFilters } from '../services/employee.service';
 import { queryKeys } from '../lib/queryClient';
 import { cn, formatINR, getInitials, getBandColor } from '../lib/utils';
 import { api } from '../lib/api';
 import AddEmployeeModal from '../components/employees/AddEmployeeModal';
-import ImportEmployeesModal from '../components/employees/ImportEmployeesModal';
 
 const DEPARTMENTS = ['Engineering', 'Sales', 'Product', 'HR', 'Finance', 'Operations'];
 const BANDS = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
@@ -37,7 +36,6 @@ export default function EmployeeDirectoryPage() {
   const [search, setSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
-  const [showImport, setShowImport] = useState(false);
   const [editEmployee, setEditEmployee] = useState<any | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -77,13 +75,6 @@ export default function EmployeeDirectoryPage() {
         </div>
 
         <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowImport(true)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-border bg-background text-sm hover:bg-accent transition-colors"
-          >
-            <Upload className="w-4 h-4" />
-            Import CSV/Excel
-          </button>
           <button
             onClick={() => { setEditEmployee(null); setShowAdd(true); }}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm hover:opacity-90 transition-opacity"
@@ -212,13 +203,13 @@ export default function EmployeeDirectoryPage() {
                             Import your Excel or CSV file to populate the platform with real employee data. All AI insights, pay equity analysis, and dashboards will update automatically.
                           </p>
                           <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                            <button
-                              onClick={() => setShowImport(true)}
+                            <Link
+                              to="/data-center"
                               className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 transition-opacity"
                             >
-                              <Upload className="w-4 h-4" />
-                              Import Excel / CSV
-                            </button>
+                              <FileSpreadsheet className="w-4 h-4" />
+                              Go to Data Center
+                            </Link>
                             <button
                               onClick={() => { setEditEmployee(null); setShowAdd(true); }}
                               className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg border border-border bg-background text-sm hover:bg-accent transition-colors"
@@ -391,10 +382,6 @@ export default function EmployeeDirectoryPage() {
           workLocation: editEmployee.workLocation,
           annualFixed: Number(editEmployee.annualFixed),
         } : undefined}
-      />
-      <ImportEmployeesModal
-        open={showImport}
-        onClose={() => setShowImport(false)}
       />
     </div>
   );

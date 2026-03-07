@@ -24,6 +24,7 @@ const PlatformSettingsPage = lazy(() => import('./pages/PlatformSettingsPage'));
 const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage'));
 const AIAssistantPage = lazy(() => import('./pages/AIAssistantPage'));
 const SentMailsPage = lazy(() => import('./pages/SentMailsPage'));
+const DataCenterPage = lazy(() => import('./pages/DataCenterPage'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-screen bg-background">
@@ -69,6 +70,7 @@ function AppRoutes() {
           <Route path="benefits-hub" element={<BenefitsHubPage />} />
           <Route path="ai-assistant" element={<AIAssistantPage />} />
           <Route path="sent-mails" element={<SentMailsPage />} />
+          <Route path="data-center" element={<DataCenterPage />} />
         </Route>
 
         {/* Catch-all — send to login, ProtectedRoute handles auth check */}
