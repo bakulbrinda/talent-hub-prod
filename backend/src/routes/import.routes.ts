@@ -29,5 +29,7 @@ router.use(authenticate);
 
 router.post('/employees', upload.single('file'), importController.importEmployees);
 router.get('/template', importController.downloadTemplate);
+router.post('/benefits', upload.single('file'), importController.importBenefits);
+router.get('/benefits/template', importController.downloadBenefitsTemplate);
 
 export default router;
