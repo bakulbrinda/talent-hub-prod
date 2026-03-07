@@ -1,4 +1,5 @@
 import { useState, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Upload, Download, Users, Gift, CheckCircle2, XCircle, Loader2, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
@@ -32,6 +33,7 @@ function UploadCard({
   templateHref,
   uploadEndpoint,
   acceptModes = false,
+  onUploadComplete,
 }: UploadCardProps) {
   const [mode, setMode] = useState<'upsert' | 'replace'>('upsert');
   const [uploading, setUploading] = useState(false);
@@ -68,6 +70,7 @@ function UploadCard({
       });
       const data: UploadResult = res.data?.data ?? res.data;
       setResult(data);
+      onUploadComplete?.();
       if (data.message) {
         toast.success('Upload queued', { description: data.message });
       } else {
@@ -219,6 +222,8 @@ function UploadCard({
 }
 
 export default function DataCenterPage() {
+  const queryClient = useQueryClient();
+
   return (
     <div className="space-y-5">
       <div>
@@ -241,8 +246,8 @@ export default function DataCenterPage() {
           description="Upload employee records in Zoho Compensation Details format (.csv or .xlsx). Supports up to 1,000 rows per upload."
           icon={Users}
           templateLabel="Download Employee Template"
-          templateHref="/api/import/template"
-          uploadEndpoint="/api/import/employees"
+          templateHref="/import/template"
+          uploadEndpoint="/import/employees"
           acceptModes
         />
         <UploadCard
@@ -250,8 +255,11 @@ export default function DataCenterPage() {
           description="Upload employee benefit enrollments and RSU utilization data. Matches employees by Employee ID and benefits by name."
           icon={Gift}
           templateLabel="Download Benefits Template"
-          templateHref="/api/import/benefits/template"
-          uploadEndpoint="/api/import/benefits"
+          templateHref="/import/benefits/template"
+          uploadEndpoint="/import/benefits"
+          onUploadComplete={() => {
+            queryClient.invalidateQueries({ queryKey: ['benefits'] });
+          }}
         />
       </div>
 

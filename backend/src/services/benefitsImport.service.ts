@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import { prisma } from '../lib/prisma';
+import { cacheDel } from '../lib/redis';
 import { BenefitStatus } from '@prisma/client';
 
 const VALID_STATUSES: string[] = ['ACTIVE', 'EXPIRED', 'CLAIMED'];
@@ -110,6 +111,12 @@ export const benefitsImportService = {
             data,
           })
         ),
+      ]);
+      // Invalidate cached benefits data so the next page load fetches fresh DB values
+      await Promise.all([
+        cacheDel('benefits:utilization'),
+        cacheDel('benefits:enrollments'),
+        cacheDel('benefits:ai-analysis'),
       ]);
     }
 
