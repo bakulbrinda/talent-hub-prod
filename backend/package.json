@@ -14,7 +14,8 @@
     "db:seed": "ts-node prisma/seed.ts",
     "db:reset": "prisma migrate reset --force && ts-node prisma/seed.ts",
     "db:studio": "prisma studio",
-    "create-admin": "ts-node -e \"require('./scripts/create-admin')\" 2>/dev/null || ts-node scripts/create-admin.ts"
+    "create-admin": "ts-node -e \"require('./scripts/create-admin')\" 2>/dev/null || ts-node scripts/create-admin.ts",
+    "seed:users": "ts-node scripts/seed-platform-users.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.30.0",

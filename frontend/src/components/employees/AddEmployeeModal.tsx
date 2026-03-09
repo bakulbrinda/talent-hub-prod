@@ -124,7 +124,7 @@ export default function AddEmployeeModal({ open, onClose, prefill }: Props) {
         monthlyGrossSalary: data.annualFixed / 12,
         incentives: 0, joiningBonus: 0, retentionBonus: 0,
         dateOfJoining: new Date(data.dateOfJoining).toISOString(),
-        employeeId: `EMP${Date.now().toString().slice(-6)}`,
+        employeeId: `EMP${Date.now()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
         employmentStatus: 'ACTIVE',
       };
 

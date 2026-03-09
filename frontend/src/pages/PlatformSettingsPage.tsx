@@ -3,13 +3,38 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Settings, Database, Bell, Key, RefreshCw, CheckCircle, XCircle,
   Mail, Users, UserPlus, Copy, Trash2, UserX, UserCheck, KeyRound, Loader2, Eye, EyeOff,
+  ChevronRight, ToggleLeft, ToggleRight, Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
 import { useAuthStore } from '../store/authStore';
+import { FEATURE_KEYS, HR_STAFF_DEFAULT_PERMISSIONS } from '@shared/constants/index';
 
 type Tab = 'users' | 'org' | 'notifications' | 'data' | 'api' | 'email';
+type InviteRole = 'ADMIN' | 'HR_STAFF';
+
+const INVITE_FEATURES: { key: string; label: string; group: string }[] = [
+  { key: FEATURE_KEYS.EMPLOYEE_VIEW,      label: 'View Employees',               group: 'Employee Management' },
+  { key: FEATURE_KEYS.EMPLOYEE_MANAGE,    label: 'Add / Edit Employees',         group: 'Employee Management' },
+  { key: FEATURE_KEYS.EMPLOYEE_DELETE,    label: 'Delete Employees',             group: 'Employee Management' },
+  { key: FEATURE_KEYS.PAY_EQUITY,         label: 'Pay Equity',                   group: 'Compensation' },
+  { key: FEATURE_KEYS.SALARY_BANDS,       label: 'Salary Bands',                 group: 'Compensation' },
+  { key: FEATURE_KEYS.SCENARIO_VIEW,      label: 'View Scenarios',               group: 'Compensation' },
+  { key: FEATURE_KEYS.SCENARIO_RUN,       label: 'Run Scenarios',                group: 'Compensation' },
+  { key: FEATURE_KEYS.SCENARIO_APPLY,     label: 'Apply Scenarios (high-impact)',group: 'Compensation' },
+  { key: FEATURE_KEYS.VARIABLE_PAY,       label: 'Variable Pay',                 group: 'People' },
+  { key: FEATURE_KEYS.PERFORMANCE_VIEW,   label: 'View Performance',             group: 'People' },
+  { key: FEATURE_KEYS.PERFORMANCE_MANAGE, label: 'Manage Performance',           group: 'People' },
+  { key: FEATURE_KEYS.BENEFITS_VIEW,      label: 'View Benefits',                group: 'Benefits' },
+  { key: FEATURE_KEYS.BENEFITS_MANAGE,    label: 'Manage Benefits',              group: 'Benefits' },
+  { key: FEATURE_KEYS.AI_INSIGHTS,        label: 'AI Insights',                  group: 'AI & Data' },
+  { key: FEATURE_KEYS.AI_SCAN,            label: 'AI Proactive Scan',            group: 'AI & Data' },
+  { key: FEATURE_KEYS.DATA_CENTER,        label: 'Data Center (imports)',        group: 'AI & Data' },
+  { key: FEATURE_KEYS.NOTIFICATIONS,      label: 'Notifications',                group: 'Admin' },
+  { key: FEATURE_KEYS.EMAIL,              label: 'Email Tools',                  group: 'Admin' },
+  { key: FEATURE_KEYS.AUDIT_LOG,          label: 'Audit Log',                    group: 'Admin' },
+];
 
 export default function PlatformSettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>('users');
@@ -23,6 +48,46 @@ export default function PlatformSettingsPage() {
   // Users tab state
   const [directForm, setDirectForm] = useState({ name: '', email: '', password: '' });
   const [directLoading, setDirectLoading] = useState(false);
+
+  // Invite modal state (Bundle E — 3-step flow)
+  const [inviteStep, setInviteStep] = useState<1 | 2 | 3>(1);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<InviteRole>('HR_STAFF');
+  const [invitePerms, setInvitePerms] = useState<string[]>([...HR_STAFF_DEFAULT_PERMISSIONS]);
+  const [inviteSending, setInviteSending] = useState(false);
+  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
+
+  const handleInviteTogglePerm = (key: string) => {
+    setInvitePerms(prev =>
+      prev.includes(key) ? prev.filter(k => k !== key) : [...prev, key]
+    );
+  };
+
+  const handleSendInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    setInviteSending(true);
+    try {
+      const body: Record<string, unknown> = { email: inviteEmail.trim(), role: inviteRole };
+      if (inviteRole === 'HR_STAFF') body.permissions = invitePerms;
+      const r = await api.post('/users/invite', body);
+      setInviteUrl(r.data?.data?.inviteUrl ?? null);
+      qc.invalidateQueries({ queryKey: ['platform-invites'] });
+      toast.success(`Invite sent to ${inviteEmail.trim()}`);
+      setInviteStep(3);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message ?? 'Failed to send invite');
+    } finally {
+      setInviteSending(false);
+    }
+  };
+
+  const resetInviteFlow = () => {
+    setInviteStep(1);
+    setInviteEmail('');
+    setInviteRole('HR_STAFF');
+    setInvitePerms([...HR_STAFF_DEFAULT_PERMISSIONS]);
+    setInviteUrl(null);
+  };
   const [createdCreds, setCreatedCreds] = useState<{ name: string; email: string; password: string } | null>(() => {
     try { const s = sessionStorage.getItem('th:lastCreatedCreds'); return s ? JSON.parse(s) : null; } catch { return null; }
   });
@@ -354,58 +419,174 @@ export default function PlatformSettingsPage() {
           {/* USER MANAGEMENT */}
           {activeTab === 'users' && (
             <div className="space-y-5">
-              {/* Add user */}
+              {/* Invite a Team Member — 3-step flow */}
               <div className="rounded-xl border border-border bg-card p-5 space-y-4">
-                <div className="flex items-center gap-2">
-                  <UserPlus className="w-4 h-4 text-primary" />
-                  <h3 className="text-sm font-semibold text-foreground">Add a Team Member</h3>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <UserPlus className="w-4 h-4 text-primary" />
+                    <h3 className="text-sm font-semibold text-foreground">Invite a Team Member</h3>
+                  </div>
+                  {/* Step indicator */}
+                  {inviteStep < 3 && (
+                    <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      {[1, 2].map(s => (
+                        <span key={s} className={cn(
+                          'w-5 h-5 rounded-full flex items-center justify-center font-medium',
+                          inviteStep === s ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                        )}>{s}</span>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-3">
-                    <p className="text-xs text-muted-foreground">Create an account and share the credentials directly with your colleague.</p>
-                    <div className="grid grid-cols-1 gap-3">
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground">Full name</label>
-                        <input
-                          type="text"
-                          value={directForm.name}
-                          onChange={e => setDirectForm(f => ({ ...f, name: e.target.value }))}
-                          placeholder="Jane Smith"
-                          className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground">Email address (login ID)</label>
-                        <input
-                          type="email"
-                          value={directForm.email}
-                          onChange={e => setDirectForm(f => ({ ...f, email: e.target.value }))}
-                          placeholder="jane@company.com"
-                          className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-muted-foreground">Password</label>
-                        <input
-                          type="text"
-                          value={directForm.password}
-                          onChange={e => setDirectForm(f => ({ ...f, password: e.target.value }))}
-                          placeholder="Min 8 characters"
-                          className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                        />
-                        <p className="text-[10px] text-muted-foreground mt-1">Share these credentials with the user out-of-band (message, call, etc.)</p>
+                {/* Step 1: Email + Role */}
+                {inviteStep === 1 && (
+                  <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Email address</label>
+                      <input
+                        type="email"
+                        value={inviteEmail}
+                        onChange={e => setInviteEmail(e.target.value)}
+                        placeholder="jane@company.com"
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground mb-2 block">Role</label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {([
+                          { role: 'ADMIN' as InviteRole, title: 'Admin', desc: 'Full platform access. Can manage users, apply scenarios, change settings.' },
+                          { role: 'HR_STAFF' as InviteRole, title: 'HR Staff', desc: 'Operational access. Feature set is customisable in the next step.' },
+                        ] as { role: InviteRole; title: string; desc: string }[]).map(opt => (
+                          <button
+                            key={opt.role}
+                            onClick={() => setInviteRole(opt.role)}
+                            className={cn(
+                              'text-left p-3 rounded-lg border-2 transition-all',
+                              inviteRole === opt.role
+                                ? 'border-primary bg-primary/5'
+                                : 'border-border hover:border-muted-foreground/40'
+                            )}
+                          >
+                            <p className="text-sm font-medium text-foreground">{opt.title}</p>
+                            <p className="text-[11px] text-muted-foreground mt-0.5">{opt.desc}</p>
+                          </button>
+                        ))}
                       </div>
                     </div>
                     <button
-                      onClick={handleCreateDirect}
-                      disabled={directLoading || !directForm.name.trim() || !directForm.email.trim() || directForm.password.length < 8}
+                      onClick={() => inviteRole === 'ADMIN' ? setInviteStep(3) : setInviteStep(2)}
+                      disabled={!inviteEmail.trim()}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
                     >
-                      {directLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
-                      {directLoading ? 'Creating…' : 'Create account'}
+                      {inviteRole === 'ADMIN' ? <Send className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                      {inviteRole === 'ADMIN' ? 'Send invite' : 'Configure access →'}
                     </button>
-
                   </div>
+                )}
+
+                {/* Step 2: Feature Toggles (HR_STAFF only) */}
+                {inviteStep === 2 && (
+                  <div className="space-y-4">
+                    <p className="text-xs text-muted-foreground">
+                      Feature Access — defaults are pre-selected based on HR Staff role. Adjust before sending the invite.
+                    </p>
+                    {Array.from(new Set(INVITE_FEATURES.map(f => f.group))).map(group => (
+                      <div key={group}>
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">{group}</p>
+                        <div className="space-y-1">
+                          {INVITE_FEATURES.filter(f => f.group === group).map(feat => {
+                            const enabled = invitePerms.includes(feat.key);
+                            return (
+                              <button
+                                key={feat.key}
+                                onClick={() => handleInviteTogglePerm(feat.key)}
+                                className="w-full flex items-center justify-between px-3 py-2 rounded-lg hover:bg-muted/50 transition-colors"
+                              >
+                                <span className="text-sm text-foreground">{feat.label}</span>
+                                {enabled
+                                  ? <ToggleRight className="w-5 h-5 text-primary flex-shrink-0" />
+                                  : <ToggleLeft className="w-5 h-5 text-muted-foreground flex-shrink-0" />
+                                }
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex items-center gap-2 pt-2">
+                      <button
+                        onClick={() => setInviteStep(1)}
+                        className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      >← Back</button>
+                      <button
+                        onClick={handleSendInvite}
+                        disabled={inviteSending}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                      >
+                        {inviteSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                        {inviteSending ? 'Sending…' : 'Send invite'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Step 3: Confirmation */}
+                {inviteStep === 3 && (
+                  <div className="space-y-4">
+                    {inviteUrl ? (
+                      <>
+                        <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                          <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-green-700 dark:text-green-400">Invite sent to {inviteEmail}</p>
+                            <p className="text-xs text-green-600/80 dark:text-green-500/80 mt-0.5">Role: {inviteRole} · Expires in 7 days</p>
+                          </div>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-medium text-muted-foreground mb-1">Invite link (share if email fails)</p>
+                          <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 border border-border">
+                            <code className="flex-1 text-[10px] text-foreground break-all">{inviteUrl}</code>
+                            <button
+                              onClick={() => { navigator.clipboard.writeText(inviteUrl); toast.success('Link copied!'); }}
+                              className="flex-shrink-0 p-1 rounded hover:bg-muted transition-colors"
+                            >
+                              <Copy className="w-3.5 h-3.5 text-muted-foreground" />
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      // Admin path: step 1 → step 3 directly, need to send
+                      <div className="space-y-3">
+                        <p className="text-sm text-foreground">
+                          Send an invite to <strong>{inviteEmail}</strong> as <strong>{inviteRole}</strong>?
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setInviteStep(1)}
+                            className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          >← Back</button>
+                          <button
+                            onClick={handleSendInvite}
+                            disabled={inviteSending}
+                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                          >
+                            {inviteSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                            {inviteSending ? 'Sending…' : 'Confirm & send invite'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                    <button
+                      onClick={resetInviteFlow}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      + Invite another person
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Users table */}
@@ -429,11 +610,12 @@ export default function PlatformSettingsPage() {
                             {u.id === me?.id && <span className="text-xs text-muted-foreground">(you)</span>}
                             <span className={cn(
                               'text-[10px] px-1.5 py-0.5 rounded font-medium',
-                              u.role === 'ADMIN' ? 'bg-primary/10 text-primary' :
-                              u.role === 'HR_MANAGER' ? 'bg-blue-100 text-blue-700' :
+                              u.role === 'ADMIN'      ? 'bg-primary/10 text-primary' :
+                              u.role === 'HR_MANAGER' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400' :
+                              u.role === 'HR_STAFF'   ? 'bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400' :
                               'bg-muted text-muted-foreground'
                             )}>
-                              {u.role === 'ADMIN' ? 'Admin' : u.role === 'HR_MANAGER' ? 'HR Manager' : 'Viewer'}
+                              {u.role === 'ADMIN' ? 'Admin' : u.role === 'HR_MANAGER' ? 'HR Manager' : u.role === 'HR_STAFF' ? 'HR Staff' : 'Viewer'}
                             </span>
                             {!u.isActive && <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">Inactive</span>}
                           </p>
@@ -817,7 +999,7 @@ export default function PlatformSettingsPage() {
                   ) : (
                     <><XCircle className="w-4 h-4 text-red-500" /><span className="text-sm text-red-700 dark:text-red-400">Disconnected</span></>
                   )}
-                  <code className="text-xs text-muted-foreground ml-auto">http://localhost:3001</code>
+                  <code className="text-xs text-muted-foreground ml-auto">{window.location.origin}</code>
                 </div>
               </div>
 

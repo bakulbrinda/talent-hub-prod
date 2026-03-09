@@ -4,8 +4,8 @@ import { prisma } from '../lib/prisma';
 import { unauthorized, badRequest } from '../middleware/errorHandler';
 import type { AuthUser } from '../types/index';
 
-const ACCESS_SECRET = process.env.JWT_SECRET || 'compsense-access-secret-min-32-chars';
-const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'compsense-refresh-secret-min-32-chars';
+const ACCESS_SECRET = process.env.JWT_SECRET!;
+const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET!;
 const ACCESS_EXPIRES = process.env.JWT_ACCESS_EXPIRES_IN || '15m';
 const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 
@@ -19,10 +19,16 @@ export const authService = {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) throw unauthorized('Invalid email or password');
 
-    const authUser: AuthUser = { id: user.id, email: user.email, name: user.name, role: user.role };
+    const authUser: AuthUser = {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      role: user.role,
+      permissions: user.permissions,
+    };
 
     const accessToken = jwt.sign(
-      { userId: user.id, role: user.role },
+      { userId: user.id, role: user.role, permissions: user.permissions },
       ACCESS_SECRET,
       { expiresIn: ACCESS_EXPIRES } as jwt.SignOptions
     );
@@ -63,8 +69,15 @@ export const authService = {
       throw unauthorized('Refresh token expired or revoked');
     }
 
+    // Fetch current user to pick up any permission changes made since last login
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { role: true, permissions: true, isActive: true },
+    });
+    if (!user || !user.isActive) throw unauthorized('Account not found or deactivated');
+
     const accessToken = jwt.sign(
-      { userId: payload.userId, role: payload.role },
+      { userId: payload.userId, role: user.role, permissions: user.permissions },
       ACCESS_SECRET,
       { expiresIn: ACCESS_EXPIRES } as jwt.SignOptions
     );
@@ -83,7 +96,7 @@ export const authService = {
   async getMe(userId: string): Promise<AuthUser> {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) throw unauthorized('User not found');
-    return { id: user.id, email: user.email, name: user.name, role: user.role };
+    return { id: user.id, email: user.email, name: user.name, role: user.role, permissions: user.permissions, lastLoginAt: user.lastLoginAt?.toISOString() ?? null };
   },
 
   async changePassword(userId: string, currentPassword: string, newPassword: string) {
@@ -116,7 +129,7 @@ export const authService = {
     const user = await prisma.user.update({
       where: { id: userId },
       data: { name: trimmed },
-      select: { id: true, email: true, name: true, role: true },
+      select: { id: true, email: true, name: true, role: true, permissions: true },
     });
     return user;
   },

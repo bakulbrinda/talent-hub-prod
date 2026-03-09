@@ -9,6 +9,16 @@ import { runProactiveScan } from './services/aiScan';
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
+// ─── Startup Environment Guards ─────────────────────────────
+if (!process.env.JWT_SECRET) {
+  logger.error('FATAL: JWT_SECRET env var is not set. Server cannot start.');
+  process.exit(1);
+}
+if (!process.env.JWT_REFRESH_SECRET) {
+  logger.error('FATAL: JWT_REFRESH_SECRET env var is not set. Server cannot start.');
+  process.exit(1);
+}
+
 async function bootstrap() {
   try {
     // ─── Test DB Connection ──────────────────────────────────

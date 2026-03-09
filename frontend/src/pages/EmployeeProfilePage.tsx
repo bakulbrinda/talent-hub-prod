@@ -224,7 +224,7 @@ export default function EmployeeProfilePage() {
     { label: 'Apr 2024', value: emp.april2024 ?? null },
     { label: 'Jul 2024', value: emp.july2024 ?? null },
   ]
-    .filter((e): e is { label: string; value: number } => e.value != null && e.value > 0)
+    .filter((e): e is { label: string; value: number | string } => e.value != null && Number(e.value) > 0)
     .map(e => ({ label: e.label, value: Number(e.value) }));
 
   // DOJ formatted as "05 Mar 2020"

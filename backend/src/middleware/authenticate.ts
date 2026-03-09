@@ -5,6 +5,7 @@ import { unauthorized } from './errorHandler';
 export interface JwtPayload {
   userId: string;
   role: string;
+  permissions?: string[];
   iat: number;
   exp: number;
 }
@@ -28,7 +29,7 @@ export const authenticate = (req: Request, _res: Response, next: NextFunction): 
   const token = authHeader.substring(7);
 
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET || 'fallback-secret') as JwtPayload;
+    const payload = jwt.verify(token, process.env.JWT_SECRET!) as JwtPayload;
     req.user = payload;
     next();
   } catch (err) {

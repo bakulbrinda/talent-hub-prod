@@ -18,7 +18,7 @@ const PerformancePage = lazy(() => import('./pages/PerformancePage'));
 const VariablePayPage = lazy(() => import('./pages/VariablePayPage'));
 const ScenarioModelerPage = lazy(() => import('./pages/ScenarioModelerPage'));
 const NotificationsCenterPage = lazy(() => import('./pages/NotificationsCenterPage'));
-const SettingsPage = lazy(() => import('./pages/SettingsPage'));
+// SettingsPage (legacy) removed — /settings redirects to /settings/platform
 const BenefitsHubPage = lazy(() => import('./pages/BenefitsHubPage'));
 const PlatformSettingsPage = lazy(() => import('./pages/PlatformSettingsPage'));
 const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage'));
@@ -64,7 +64,7 @@ function AppRoutes() {
           <Route path="variable-pay" element={<VariablePayPage />} />
           <Route path="scenarios" element={<ScenarioModelerPage />} />
           <Route path="notifications" element={<NotificationsCenterPage />} />
-          <Route path="settings" element={<SettingsPage />} />
+          <Route path="settings" element={<Navigate to="/settings/platform" replace />} />
           <Route path="settings/platform" element={<PlatformSettingsPage />} />
           <Route path="settings/user" element={<UserSettingsPage />} />
           <Route path="benefits-hub" element={<BenefitsHubPage />} />

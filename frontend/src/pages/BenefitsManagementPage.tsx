@@ -2,6 +2,7 @@ import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Gift, BarChart3, Users, CheckCircle, XCircle, TrendingUp, Upload, Sparkles, RefreshCw, X, FileSpreadsheet, Loader2, Award } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import { toast } from 'sonner';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
 
@@ -76,6 +77,9 @@ export default function BenefitsManagementPage() {
       queryClient.invalidateQueries({ queryKey: ['benefits', 'enrollments'] });
       queryClient.removeQueries({ queryKey: ['benefits', 'ai-analysis'] });
       setImportFile(null);
+    },
+    onError: (error: any) => {
+      toast.error(error?.response?.data?.error?.message ?? error?.message ?? 'Benefits import failed');
     },
   });
 

@@ -28,6 +28,8 @@ export interface AuthUser {
   email: string;
   name: string;
   role: UserRole;
+  permissions?: string[];
+  lastLoginAt?: string | null;
 }
 
 export interface LoginRequest {
@@ -45,7 +47,7 @@ export interface RefreshResponse {
   accessToken: string;
 }
 
-export type UserRole = 'ADMIN' | 'VIEWER';
+export type UserRole = 'ADMIN' | 'HR_MANAGER' | 'HR_STAFF' | 'VIEWER';
 
 // ─── Job Architecture ─────────────────────────────────────────
 export interface JobArea {
@@ -136,36 +138,37 @@ export interface Employee {
   workMode: WorkMode;
   costCenter?: string | null;
 
-  // Annual Compensation
-  annualFixed: number;
-  variablePay: number;
-  specialAllowance: number;
-  hra: number;
-  pfYearly: number;
-  basicAnnual: number;
-  retentionBonus: number;
-  annualCtc: number;
-  joiningBonus: number;
-  lta: number;
-  flexiTotalYearly: number;
-  subTotalA: number;
-  incentives: number;
+  // Annual Compensation — Prisma Decimal fields serialize as strings in JSON;
+  // consumers must wrap with Number() before arithmetic or comparison.
+  annualFixed: number | string;
+  variablePay: number | string;
+  specialAllowance: number | string;
+  hra: number | string;
+  pfYearly: number | string;
+  basicAnnual: number | string;
+  retentionBonus: number | string;
+  annualCtc: number | string;
+  joiningBonus: number | string;
+  lta: number | string;
+  flexiTotalYearly: number | string;
+  subTotalA: number | string;
+  incentives: number | string;
 
   // Monthly Compensation
-  hraMonthly: number;
-  pfMonthly: number;
-  basicMonthly: number;
-  ltaMonthly: number;
-  monthlyGrossSalary: number;
-  flexiTotalMonthly: number;
-  subTotalAMonthly: number;
-  monthlySpecialAllowance: number;
+  hraMonthly: number | string;
+  pfMonthly: number | string;
+  basicMonthly: number | string;
+  ltaMonthly: number | string;
+  monthlyGrossSalary: number | string;
+  flexiTotalMonthly: number | string;
+  subTotalAMonthly: number | string;
+  monthlySpecialAllowance: number | string;
 
   // Revision History
-  april2023?: number | null;
-  july2023?: number | null;
-  april2024?: number | null;
-  july2024?: number | null;
+  april2023?: number | string | null;
+  july2023?: number | string | null;
+  april2024?: number | string | null;
+  july2024?: number | string | null;
   lastIncrementDate?: string | null;
   lastIncrementPercent?: number | null;
 
@@ -622,7 +625,7 @@ export interface SocketRsuVestingPayload {
 // ─── Enums ────────────────────────────────────────────────────
 export type BandCode = 'A1' | 'A2' | 'P1' | 'P2' | 'P3' | 'M1' | 'M2' | 'D0' | 'D1' | 'D2';
 export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT';
-export type EmploymentStatus = 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE';
+export type EmploymentStatus = 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE' | 'TERMINATED';
 export type Gender = 'MALE' | 'FEMALE' | 'NON_BINARY' | 'PREFER_NOT_TO_SAY';
 export type WorkMode = 'REMOTE' | 'HYBRID' | 'ONSITE';
 export type ProficiencyLevel = 'BEGINNER' | 'INTERMEDIATE' | 'ADVANCED' | 'EXPERT';

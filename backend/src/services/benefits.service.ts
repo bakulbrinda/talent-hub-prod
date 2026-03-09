@@ -3,6 +3,7 @@ import { cacheGet, cacheSet, cacheDel } from '../lib/redis';
 import { callClaude } from '../lib/claudeClient';
 import { parse } from 'csv-parse/sync';
 import * as XLSX from 'xlsx';
+import { BAND_ORDER } from '../types/index';
 
 export const benefitsService = {
   getCatalog: async () => {
@@ -60,7 +61,7 @@ export const benefitsService = {
     const enrollments = await prisma.employeeBenefit.findMany({
       where,
       include: {
-        employee: { select: { id: true, firstName: true, lastName: true, department: true, band: true } },
+        employee: { select: { id: true, firstName: true, lastName: true, department: true, band: true, designation: true } },
         benefit: { select: { id: true, name: true, category: true, annualValue: true } },
       },
       orderBy: { enrolledAt: 'desc' },
@@ -85,8 +86,7 @@ export const benefitsService = {
     const criteria = benefit.eligibilityCriteria as any;
     const failed: string[] = [];
     if (criteria?.minBand) {
-      const bandOrder = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
-      if (bandOrder.indexOf(employee.band) < bandOrder.indexOf(criteria.minBand)) {
+      if ((BAND_ORDER as readonly string[]).indexOf(employee.band) < (BAND_ORDER as readonly string[]).indexOf(criteria.minBand)) {
         failed.push(`Requires band ${criteria.minBand}+`);
       }
     }
@@ -113,9 +113,11 @@ export const benefitsService = {
     if (!eligibility.isEligible) {
       throw Object.assign(new Error('Employee not eligible'), { statusCode: 400, details: eligibility.failedCriteria });
     }
-    return prisma.employeeBenefit.create({
+    const result = await prisma.employeeBenefit.create({
       data: { employeeId, benefitId, enrolledAt: new Date(), status: 'ACTIVE', utilizationPercent: 0, utilizedValue: 0 },
     });
+    await Promise.allSettled([cacheDel('benefits:utilization'), cacheDel('benefits:ai-analysis')]);
+    return result;
   },
 
   analyzeWithAI: async (): Promise<string> => {
@@ -183,12 +185,18 @@ Format with clear markdown headers. Be specific with numbers.`;
       rawRows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { defval: '', raw: false });
     }
 
-    const benefits = await prisma.benefitsCatalog.findMany({ select: { id: true, name: true } });
+    const [benefits, allEmployees] = await Promise.all([
+      prisma.benefitsCatalog.findMany({ select: { id: true, name: true } }),
+      // Pre-fetch all employees to avoid N+1 per-row DB lookup (N2 fix)
+      prisma.employee.findMany({ select: { id: true, employeeId: true, email: true } }),
+    ]);
     // Two normalization strategies: spaces-only and all-non-alphanumeric
     const norm1 = (s: string) => s.toLowerCase().replace(/\s+/g, '');
     const norm2 = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
     const benefitMap1 = new Map(benefits.map(b => [norm1(b.name), b.id]));
     const benefitMap2 = new Map(benefits.map(b => [norm2(b.name), b.id]));
+    const employeeByEmpId = new Map(allEmployees.map(e => [e.employeeId, e.id]));
+    const employeeByEmail = new Map(allEmployees.map(e => [e.email.toLowerCase(), e.id]));
 
     let updated = 0; let failed = 0; const errors: string[] = [];
 
@@ -207,19 +215,16 @@ Format with clear markdown headers. Be specific with numbers.`;
 
         if (!empIdRaw || !benefitName) { failed++; errors.push(`Row skipped: missing employeeId or benefitName`); continue; }
 
-        const employee = await prisma.employee.findFirst({
-          where: { OR: [{ employeeId: empIdRaw }, { email: empIdRaw.toLowerCase() }] },
-          select: { id: true },
-        });
-        if (!employee) { failed++; errors.push(`Employee not found: ${empIdRaw}`); continue; }
+        const employeeId = employeeByEmpId.get(empIdRaw) ?? employeeByEmail.get(empIdRaw.toLowerCase());
+        if (!employeeId) { failed++; errors.push(`Employee not found: ${empIdRaw}`); continue; }
 
         const benefitId = benefitMap1.get(norm1(benefitName)) ?? benefitMap2.get(norm2(benefitName));
         if (!benefitId) { failed++; errors.push(`Benefit not found: ${benefitName}`); continue; }
 
         await prisma.employeeBenefit.upsert({
-          where: { employeeId_benefitId: { employeeId: employee.id, benefitId } },
+          where: { employeeId_benefitId: { employeeId, benefitId } },
           update: { utilizationPercent: isNaN(utilPct) ? 0 : utilPct, utilizedValue: isNaN(utilValue) ? 0 : utilValue, status: 'ACTIVE' },
-          create: { employeeId: employee.id, benefitId, enrolledAt: new Date(), status: 'ACTIVE', utilizationPercent: isNaN(utilPct) ? 0 : utilPct, utilizedValue: isNaN(utilValue) ? 0 : utilValue },
+          create: { employeeId, benefitId, enrolledAt: new Date(), status: 'ACTIVE', utilizationPercent: isNaN(utilPct) ? 0 : utilPct, utilizedValue: isNaN(utilValue) ? 0 : utilValue },
         });
         updated++;
       } catch (err: any) {

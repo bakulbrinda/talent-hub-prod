@@ -76,7 +76,6 @@ export function ChatPanel() {
     setInput('');
     setStreaming(true);
 
-    const assistantIdx = messages.length + 1; // index after user message
     setMessages(prev => [...prev, { role: 'assistant', content: '', isStreaming: true, activeTools: [] }]);
 
     const token = sessionStorage.getItem('accessToken');

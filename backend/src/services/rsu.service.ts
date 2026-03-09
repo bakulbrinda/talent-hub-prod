@@ -1,9 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { callClaude } from '../lib/claudeClient';
 import { cacheGet, cacheSet } from '../lib/redis';
-
-// Band 1: A1, A2 | Band 2: P1, P2 | Band 3: P3 | Band 4: M1, M2 | Band 5: D0, D1, D2
-const BAND_ORDER = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
+import { BAND_ORDER } from '../types/index';
 
 function generateVestingEvents(grantId: string, grantDate: Date, totalUnits: number) {
   return [12, 24, 36, 48].map(months => {
@@ -42,8 +40,8 @@ export const rsuService = {
   }) => {
     const employee = await prisma.employee.findUnique({ where: { id: data.employeeId } });
     if (!employee) throw new Error('Employee not found');
-    const bandIdx = BAND_ORDER.indexOf(employee.band);
-    if (bandIdx < BAND_ORDER.indexOf('P2')) {
+    const bandIdx = (BAND_ORDER as readonly string[]).indexOf(employee.band);
+    if (bandIdx < BAND_ORDER.indexOf('P1')) {
       throw Object.assign(new Error('Employee band not eligible for RSU'), { statusCode: 400 });
     }
 

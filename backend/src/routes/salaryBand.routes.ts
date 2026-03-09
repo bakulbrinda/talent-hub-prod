@@ -9,8 +9,8 @@ router.use(authenticate);
 router.get('/market-benchmarks', ctrl.getMarketBenchmarks);
 router.get('/analysis/outliers', ctrl.getOutliers);
 router.get('/', ctrl.getAll);
-router.post('/', ctrl.create);
-router.put('/:id', ctrl.update);
+router.post('/', requireRole('ADMIN', 'HR_MANAGER'), ctrl.create);
+router.put('/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.update);
 router.delete('/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.deleteSalaryBand);
 
 export default router;

@@ -50,9 +50,14 @@ export default function NotificationsCenterPage() {
 
   const markReadMutation = useMutation({
     mutationFn: notifApi.markRead,
-    onSuccess: () => {
+    onSuccess: async () => {
       queryClient.invalidateQueries({ queryKey: ['notifications'] });
-      setUnreadCount(Math.max(0, unreadCount - 1));
+      try {
+        const r = await api.get('/notifications/summary');
+        setUnreadCount(r.data?.data?.unread ?? 0);
+      } catch {
+        // best-effort; store will self-correct on next summary fetch
+      }
     },
   });
 

@@ -68,10 +68,62 @@ export const RSU_GRANT_TIERS: Record<string, { min: number; max: number }> = {
 };
 
 export const RSU_ELIGIBILITY = {
-  MIN_BAND_LEVEL: 4, // P2 = level 4
+  MIN_BAND_LEVEL: 2, // P1 = level 3 (index 2 in BAND_ORDER) — P1 and above are eligible
   MIN_PERFORMANCE_RATING: 4.0,
   MIN_TENURE_MONTHS: 12,
 };
+
+// ─── Feature Permission Keys ──────────────────────────────────
+// All available feature keys for the permission system.
+// ADMIN accounts bypass all permission checks unconditionally.
+// HR_STAFF accounts use HR_STAFF_DEFAULT_PERMISSIONS unless overridden at invite time.
+export const FEATURE_KEYS = {
+  DASHBOARD:           'dashboard',
+  EMPLOYEE_VIEW:       'employee.view',
+  EMPLOYEE_MANAGE:     'employee.manage',
+  EMPLOYEE_DELETE:     'employee.delete',
+  PAY_EQUITY:          'pay_equity',
+  SALARY_BANDS:        'salary_bands',
+  SCENARIO_VIEW:       'scenario.view',
+  SCENARIO_RUN:        'scenario.run',
+  SCENARIO_APPLY:      'scenario.apply',    // high-impact: writes salaries org-wide
+  BENEFITS_VIEW:       'benefits.view',
+  BENEFITS_MANAGE:     'benefits.manage',
+  VARIABLE_PAY:        'variable_pay',
+  PERFORMANCE_VIEW:    'performance.view',
+  PERFORMANCE_MANAGE:  'performance.manage',
+  AI_INSIGHTS:         'ai_insights',
+  AI_SCAN:             'ai_scan',           // costs Anthropic API calls
+  DATA_CENTER:         'data_center',
+  NOTIFICATIONS:       'notifications',
+  EMAIL:               'email',
+  AUDIT_LOG:           'audit_log',
+  USER_MANAGE:         'user.manage',
+  SETTINGS_PLATFORM:   'settings.platform',
+} as const;
+
+// Default permissions granted to HR_STAFF users when no explicit override is set.
+// Covers all operational day-to-day features; excludes high-impact / admin-only actions.
+export const HR_STAFF_DEFAULT_PERMISSIONS: string[] = [
+  FEATURE_KEYS.DASHBOARD,
+  FEATURE_KEYS.EMPLOYEE_VIEW,
+  FEATURE_KEYS.EMPLOYEE_MANAGE,
+  FEATURE_KEYS.EMPLOYEE_DELETE,
+  FEATURE_KEYS.PAY_EQUITY,
+  FEATURE_KEYS.SALARY_BANDS,
+  FEATURE_KEYS.SCENARIO_VIEW,
+  FEATURE_KEYS.SCENARIO_RUN,
+  FEATURE_KEYS.BENEFITS_VIEW,
+  FEATURE_KEYS.BENEFITS_MANAGE,
+  FEATURE_KEYS.VARIABLE_PAY,
+  FEATURE_KEYS.PERFORMANCE_VIEW,
+  FEATURE_KEYS.PERFORMANCE_MANAGE,
+  FEATURE_KEYS.AI_INSIGHTS,
+  FEATURE_KEYS.DATA_CENTER,
+  FEATURE_KEYS.NOTIFICATIONS,
+  FEATURE_KEYS.EMAIL,
+  // Excluded: scenario.apply, ai_scan, audit_log, user.manage, settings.platform
+];
 
 // ─── Socket Event Names ───────────────────────────────────────
 export const SOCKET_EVENTS = {
@@ -84,7 +136,6 @@ export const SOCKET_EVENTS = {
   // Cross-module data change events — emitted after any employee or band write
   EMPLOYEE_DATA_CHANGED: 'employee:data:changed',
   SALARY_BAND_UPDATED: 'salary:band:updated',
-  DATA_REFRESH_MODULES: 'data:refresh:modules',
 } as const;
 
 // ─── AI Insight Configuration ─────────────────────────────────

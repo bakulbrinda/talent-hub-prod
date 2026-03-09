@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Upload, Download, Users, Gift, CheckCircle2, XCircle, Loader2, FileSpreadsheet } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
@@ -223,6 +223,14 @@ function UploadCard({
 
 export default function DataCenterPage() {
   const queryClient = useQueryClient();
+  const { data: catalogRaw } = useQuery({
+    queryKey: ['benefits', 'catalog'],
+    queryFn: () => api.get('/benefits/catalog').then(r => r.data?.data ?? []),
+    staleTime: 10 * 60 * 1000,
+  });
+  const benefitNames: string[] = Array.isArray(catalogRaw)
+    ? catalogRaw.map((b: any) => b.name as string)
+    : [];
 
   return (
     <div className="space-y-5">
@@ -273,22 +281,14 @@ export default function DataCenterPage() {
           The Benefit Name column in your file must match one of these exactly (case-insensitive):
         </p>
         <div className="flex flex-wrap gap-2">
-          {[
-            'Comprehensive Medical Insurance',
-            'Parental Medical Insurance',
-            'Mental Health on Loop',
-            'RSU Grant',
-            'Training & Learning Allowance',
-            'Paternity Leave',
-            'Bereavement Leave',
-            'Mochaccino Award',
-            'TuxedoMocha Award',
-            'Annual Company Offsite',
-          ].map(name => (
-            <span key={name} className="px-2 py-0.5 rounded-md bg-muted text-xs text-muted-foreground font-mono">
-              {name}
-            </span>
-          ))}
+          {benefitNames.length > 0
+            ? benefitNames.map(name => (
+                <span key={name} className="px-2 py-0.5 rounded-md bg-muted text-xs text-muted-foreground font-mono">
+                  {name}
+                </span>
+              ))
+            : <span className="text-xs text-muted-foreground italic">Loading…</span>
+          }
         </div>
       </div>
     </div>

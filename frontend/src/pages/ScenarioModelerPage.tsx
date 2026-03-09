@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
 import { ScenarioSuggester } from '../components/ScenarioSuggester';
+import { useAccess } from '../hooks/useAccess';
 
 const scenarioApi = {
   getAll: async () => { const r = await api.get('/scenarios'); return r.data; },
@@ -37,6 +38,7 @@ export default function ScenarioModelerPage() {
   const [aiLoading, setAiLoading] = useState(false);
   const [applying, setApplying] = useState(false);
   const [showApplyConfirm, setShowApplyConfirm] = useState(false);
+  const canApply = useAccess('scenario.apply');
   const [newScenario, setNewScenario] = useState({ name: '', description: '', rules: [emptyRule()] });
   const [isCreating, setIsCreating] = useState(false);
 
@@ -311,7 +313,8 @@ export default function ScenarioModelerPage() {
                   </button>
                   <button
                     onClick={() => deleteMutation.mutate(selected.id)}
-                    className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-red-500 hover:border-red-300 transition-colors"
+                    disabled={deleteMutation.isPending}
+                    className="p-1.5 rounded-lg border border-border text-muted-foreground hover:text-red-500 hover:border-red-300 transition-colors disabled:opacity-50 disabled:pointer-events-none"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -347,7 +350,7 @@ export default function ScenarioModelerPage() {
             <div className="rounded-xl border border-border bg-card p-5 space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-sm font-semibold text-foreground">Simulation Results</h3>
-                {!showApplyConfirm ? (
+                {canApply && !showApplyConfirm ? (
                   <button
                     onClick={() => setShowApplyConfirm(true)}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-600 text-white text-xs font-medium hover:bg-green-700 transition-colors"
@@ -355,7 +358,7 @@ export default function ScenarioModelerPage() {
                     <CheckCircle className="w-3.5 h-3.5" />
                     Apply Changes
                   </button>
-                ) : (
+                ) : canApply ? (
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">Confirm apply?</span>
                     <button onClick={handleApply} disabled={applying} className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-xs font-medium hover:bg-red-700 disabled:opacity-50 transition-colors">
@@ -365,7 +368,7 @@ export default function ScenarioModelerPage() {
                       Cancel
                     </button>
                   </div>
-                )}
+                ) : null}
               </div>
 
               {/* Summary cards */}

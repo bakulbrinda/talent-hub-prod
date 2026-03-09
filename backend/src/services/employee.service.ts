@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
 import { cacheDelPattern } from '../lib/redis';
-import { emitDashboardRefresh, emitEmployeeCreated, emitEmployeeUpdated } from '../lib/socket';
+import { emitDashboardRefresh, emitEmployeeCreated, emitEmployeeUpdated, emitEmployeeDataChanged } from '../lib/socket';
 
 export interface EmployeeFilters {
   page?: number;
@@ -101,6 +101,7 @@ export const employeeService = {
   delete: async (id: string) => {
     await prisma.employee.delete({ where: { id } });
     await invalidateEmployeeDerivedCaches();
+    emitEmployeeDataChanged();
     emitDashboardRefresh();
   },
 

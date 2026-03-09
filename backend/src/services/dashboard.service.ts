@@ -220,6 +220,13 @@ export const dashboardService = {
 
   getActionRequired: () => cached('dashboard:action-required', async () => {
     const thirtyDaysOut = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    // Find the latest performance cycle so we only count current low-performers
+    const latestCycleRow = await prisma.performanceRating.findFirst({
+      orderBy: { cycle: 'desc' },
+      select: { cycle: true },
+    });
+
     const [outsideBand, deptRows, upcomingVesting, lowPerfCount] = await Promise.all([
       prisma.employee.count({
         where: { employmentStatus: 'ACTIVE', OR: [{ compaRatio: { lt: 80 } }, { compaRatio: { gt: 120 } }] },
@@ -232,7 +239,15 @@ export const dashboardService = {
       prisma.rsuVestingEvent.count({
         where: { isVested: false, vestingDate: { gte: new Date(), lt: thirtyDaysOut } },
       }),
-      prisma.performanceRating.count({ where: { rating: { lt: 3 } } }),
+      latestCycleRow
+        ? prisma.performanceRating.count({
+            where: {
+              cycle: latestCycleRow.cycle,
+              rating: { lt: 3 },
+              employee: { employmentStatus: 'ACTIVE' },
+            },
+          })
+        : Promise.resolve(0),
     ]);
 
     const deptMap: Record<string, { male: number; female: number }> = {};

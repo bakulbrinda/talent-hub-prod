@@ -3,6 +3,7 @@ import { Server as SocketServer } from 'socket.io';
 import { createAdapter } from '@socket.io/redis-adapter';
 import { pubClient, subClient } from './redis';
 import logger from './logger';
+import jwt from 'jsonwebtoken';
 import type {
   SocketNotificationPayload,
   SocketPayAnomalyPayload,
@@ -27,6 +28,20 @@ export const initializeSocket = (server: HttpServer): SocketServer => {
     },
     pingTimeout: 60000,
     pingInterval: 25000,
+  });
+
+  // Reject unauthenticated socket connections
+  io.use((socket, next) => {
+    const token = socket.handshake.auth?.token as string | undefined;
+    if (!token) {
+      return next(new Error('Authentication required'));
+    }
+    try {
+      jwt.verify(token, process.env.JWT_SECRET!);
+      next();
+    } catch {
+      next(new Error('Invalid or expired token'));
+    }
   });
 
   // Attach Redis adapter for horizontal scaling

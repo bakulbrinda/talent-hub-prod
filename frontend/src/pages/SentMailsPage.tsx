@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Mail, ChevronDown, ChevronRight, Loader2 } from 'lucide-react';
+import DOMPurify from 'dompurify';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
 
@@ -83,7 +84,7 @@ export default function SentMailsPage() {
                     <div className="px-5 pb-4 pt-1 bg-muted/5">
                       <div
                         className="text-sm text-foreground border border-border rounded-lg p-4 bg-background max-h-72 overflow-y-auto"
-                        dangerouslySetInnerHTML={{ __html: log.body }}
+                        dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(log.body ?? '') }}
                       />
                     </div>
                   )}

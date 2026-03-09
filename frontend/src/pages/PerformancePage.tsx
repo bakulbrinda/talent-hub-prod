@@ -67,11 +67,11 @@ export default function PerformancePage() {
     queryFn: performanceApi.getMatrix,
   });
   const { data: promotionRaw, isLoading: promotionLoading } = useQuery({
-    queryKey: ['performance', 'promotion'],
+    queryKey: ['performance', 'promotion-readiness'],
     queryFn: performanceApi.getPromotionReadiness,
   });
   const { data: gapsRaw, isLoading: gapsLoading } = useQuery({
-    queryKey: ['performance', 'gaps'],
+    queryKey: ['performance', 'pay-alignment-gaps'],
     queryFn: performanceApi.getPayAlignmentGaps,
   });
 

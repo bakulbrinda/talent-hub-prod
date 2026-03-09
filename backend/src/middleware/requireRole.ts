@@ -16,7 +16,7 @@ export const requireRole = (...roles: UserRole[]) =>
       res.status(403).json({
         error: {
           code: 'FORBIDDEN',
-          message: `Access denied. Required role: ${roles.join(' or ')}. Your role: ${userRole ?? 'unknown'}.`,
+          message: 'Access denied. Insufficient permissions.',
         },
       });
       return;

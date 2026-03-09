@@ -18,11 +18,11 @@ export function useSocket() {
     const socket = initSocket(accessToken);
 
     socket.on('connect', () => {
-      console.log('[Socket] Connected:', socket.id);
+      if (import.meta.env.DEV) console.log('[Socket] Connected:', socket.id);
     });
 
     socket.on('disconnect', () => {
-      console.log('[Socket] Disconnected');
+      if (import.meta.env.DEV) console.log('[Socket] Disconnected');
     });
 
     socket.on('notification:new', (notification: Notification) => {
@@ -51,6 +51,7 @@ export function useSocket() {
         description: `${((payload.used / payload.limit) * 100).toFixed(0)}% of budget consumed`,
         duration: 8000,
       });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     });
 
     socket.on('rsu:vesting', (payload: { employee: { firstName: string; lastName: string }; units: number }) => {
@@ -58,6 +59,8 @@ export function useSocket() {
         description: `${payload.employee.firstName} ${payload.employee.lastName} — ${payload.units} units vested`,
         duration: 6000,
       });
+      queryClient.invalidateQueries({ queryKey: ['rsu'] });
+      queryClient.invalidateQueries({ queryKey: ['benefits'] });
     });
 
     // Invalidate every dashboard query key, not just kpis + bandDistribution.
@@ -84,6 +87,15 @@ export function useSocket() {
       queryClient.invalidateQueries({ queryKey: ['performance'] });
     });
 
+    // Real-time import progress — emitted per batch during CSV import.
+    socket.on('import:progress', (payload: { processed: number; total: number; errors: unknown[] }) => {
+      const pct = payload.total > 0 ? Math.round((payload.processed / payload.total) * 100) : 0;
+      toast.loading(`Importing employees… ${payload.processed}/${payload.total} (${pct}%)`, {
+        id: 'import-progress',
+        duration: Infinity,
+      });
+    });
+
     // Bulk import complete — full refresh of every data-dependent module.
     socket.on('import:complete', (payload: { imported: number; failed: number }) => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
@@ -93,6 +105,7 @@ export function useSocket() {
       queryClient.invalidateQueries({ queryKey: ['performance'] });
       queryClient.invalidateQueries({ queryKey: ['scenarios'] });
       queryClient.invalidateQueries({ queryKey: ['ai-insights'] });
+      toast.dismiss('import-progress');
       if (payload.imported > 0) {
         toast.success(`Bulk import finished: ${payload.imported} employees added`, { duration: 5000 });
       }
@@ -126,6 +139,7 @@ export function useSocket() {
       socket.off('dashboard:refresh');
       socket.off('employee:created');
       socket.off('employee:updated');
+      socket.off('import:progress');
       socket.off('import:complete');
       socket.off('employee:data:changed');
       socket.off('salary:band:updated');

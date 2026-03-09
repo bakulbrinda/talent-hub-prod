@@ -1,5 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { callClaude } from '../lib/claudeClient';
+import { cacheDelPattern } from '../lib/redis';
+import { emitDashboardRefresh, emitEmployeeDataChanged } from '../lib/socket';
 
 interface ScenarioFilter {
   band?: string | string[];
@@ -153,13 +155,13 @@ export const scenariosService = {
       affectedEmployees: affected,
     };
 
-    // DRAFT is the closest valid status while results are pending; use APPLIED when committed
+    // Preserve the original snapshot from the first run; subsequent runs update cost/count only
     await prisma.scenario.update({
       where: { id },
       data: {
         totalCostImpact: result.delta,
         affectedEmployeeCount: affected.length,
-        snapshotData: result as any,
+        ...(scenario.snapshotData ? {} : { snapshotData: result as any }),
       },
     });
     return result;
@@ -170,29 +172,70 @@ export const scenariosService = {
     if (!scenario) throw new Error('Scenario not found');
     const rules = (scenario.rules as unknown) as ScenarioRule[];
 
-    const employees = await prisma.employee.findMany({
-      where: { employmentStatus: 'ACTIVE' },
-      include: {
-        performanceRatings: { orderBy: { cycle: 'desc' }, take: 1 },
-      },
-    });
+    const [employees, salaryBands] = await Promise.all([
+      prisma.employee.findMany({
+        where: { employmentStatus: 'ACTIVE' },
+        include: {
+          performanceRatings: { orderBy: { cycle: 'desc' }, take: 1 },
+        },
+      }),
+      prisma.salaryBand.findMany({ include: { band: true } }),
+    ]);
 
-    let updatedCount = 0;
+    // Pre-build band → midpoint map for compaRatio recalculation
+    const bandMidpoints: Record<string, number> = {};
+    for (const sb of salaryBands) {
+      if (!bandMidpoints[sb.band.code]) {
+        bandMidpoints[sb.band.code] = Number(sb.midSalary);
+      }
+    }
+
+    // Collect all updates first, then execute in a single transaction (N3 fix)
+    const updates: { id: string; annualFixed: number; annualCtc: number; compaRatio?: number }[] = [];
     for (const emp of employees) {
       for (const rule of rules) {
         if (matchesFilter(emp, rule.filter)) {
-          const newFixed = applyAction(Number(emp.annualFixed), rule.action);
-          await prisma.employee.update({
-            where: { id: emp.id },
-            data: { annualFixed: Math.round(newFixed) },
-          });
-          updatedCount++;
+          const oldFixed = Number(emp.annualFixed);
+          const newFixed = Math.round(applyAction(oldFixed, rule.action));
+          const ratio = oldFixed > 0 ? newFixed / oldFixed : 1;
+          const newCtc = Math.round(Number(emp.annualCtc) * ratio);
+          const mid = bandMidpoints[emp.band] ?? 0;
+          const compaRatio = mid > 0 ? (newFixed / mid) * 100 : undefined;
+          updates.push({ id: emp.id, annualFixed: newFixed, annualCtc: newCtc, compaRatio });
           break;
         }
       }
     }
 
-    await prisma.scenario.update({ where: { id }, data: { status: 'APPLIED' } });
+    await prisma.$transaction([
+      ...updates.map(u =>
+        prisma.employee.update({
+          where: { id: u.id },
+          data: {
+            annualFixed: u.annualFixed,
+            annualCtc: u.annualCtc,
+            ...(u.compaRatio !== undefined && { compaRatio: u.compaRatio }),
+          },
+        })
+      ),
+      prisma.scenario.update({ where: { id }, data: { status: 'APPLIED' } }),
+    ]);
+    const updatedCount = updates.length;
+
+    // Bust all caches derived from employee compensation data
+    await Promise.allSettled([
+      cacheDelPattern('dashboard:*'),
+      cacheDelPattern('pay-equity:*'),
+      cacheDelPattern('salary-bands:*'),
+      cacheDelPattern('performance:*'),
+      cacheDelPattern('ai:*'),
+      cacheDelPattern('ai_insights:*'),
+    ]);
+
+    // Notify all connected clients so modules re-fetch immediately
+    emitEmployeeDataChanged();
+    emitDashboardRefresh();
+
     return { applied: updatedCount };
   },
 

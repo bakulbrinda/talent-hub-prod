@@ -1,11 +1,17 @@
 import { prisma } from '../lib/prisma';
-import { cacheDelPattern } from '../lib/redis';
+import { cacheGet, cacheSet, cacheDelPattern } from '../lib/redis';
 import { emitSalaryBandUpdated } from '../lib/socket';
 import { employeeService } from './employee.service';
 
+const SALARY_BANDS_TTL = 5 * 60; // 5 minutes
+
 export const salaryBandService = {
   getAll: async (filters?: { bandId?: string; jobAreaId?: string }) => {
-    return prisma.salaryBand.findMany({
+    const cacheKey = `salary-bands:all:${filters?.bandId ?? ''}:${filters?.jobAreaId ?? ''}`;
+    const cached = await cacheGet<any[]>(cacheKey);
+    if (cached) return cached;
+
+    const result = await prisma.salaryBand.findMany({
       where: {
         ...(filters?.bandId && { bandId: filters.bandId }),
         ...(filters?.jobAreaId && { jobAreaId: filters.jobAreaId }),
@@ -13,6 +19,9 @@ export const salaryBandService = {
       include: { band: true, jobArea: true },
       orderBy: [{ band: { level: 'asc' } }],
     });
+
+    await cacheSet(cacheKey, result, SALARY_BANDS_TTL);
+    return result;
   },
 
   create: async (data: any) => {

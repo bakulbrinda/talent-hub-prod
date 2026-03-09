@@ -3,10 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Zap, TrendingUp, Users, DollarSign } from 'lucide-react';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
+import { BAND_ORDER } from '@shared/constants/index';
 
 export default function VariablePayPage() {
   const { data: empRaw, isLoading } = useQuery({
-    queryKey: ['employees-vp'],
+    queryKey: ['employees'],
     queryFn: async () => { const r = await api.get('/employees?limit=2000'); return r.data; },
     staleTime: 5 * 60 * 1000,
   });
@@ -65,7 +66,6 @@ export default function VariablePayPage() {
 
   // Variable pay % of fixed by band
   const byBand = useMemo(() => {
-    const BAND_ORDER = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
     const map: Record<string, { pcts: number[]; totalLakhs: number }> = {};
     for (const e of withVariable) {
       const b = e.band || 'Unknown';
@@ -81,7 +81,7 @@ export default function VariablePayPage() {
         totalLakhs: v.totalLakhs,
         count: v.pcts.length,
       }))
-      .sort((a, b) => BAND_ORDER.indexOf(a.band) - BAND_ORDER.indexOf(b.band));
+      .sort((a, b) => BAND_ORDER.indexOf(a.band as any) - BAND_ORDER.indexOf(b.band as any));
   }, [withVariable]);
 
   // Top 15 earners

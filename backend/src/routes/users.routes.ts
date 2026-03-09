@@ -1,27 +1,32 @@
 /**
  * users.routes — User management + invite system
- * No RBAC: all authenticated users have full access.
+ * All mutating endpoints require ADMIN role.
+ * Public endpoints (invite accept, password reset) are unauthenticated by design.
  */
 
 import { Router, Request, Response } from 'express';
 import { authenticate } from '../middleware/authenticate';
+import { requireRole } from '../middleware/requireRole';
 import { usersService } from '../services/users.service';
 import { emailService } from '../services/email.service';
 import { logAction } from '../services/auditLog.service';
 import logger from '../lib/logger';
+import type { UserRole } from '../types/index';
+
+const VALID_ROLES: UserRole[] = ['ADMIN', 'HR_MANAGER', 'HR_STAFF', 'VIEWER'];
 
 const router = Router();
 
 // ─── User Management ─────────────────────────────────────────────────────────
 
 /** GET /api/users — list all org users */
-router.get('/', authenticate, async (req: Request, res: Response) => {
+router.get('/', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   const users = await usersService.getAll();
   res.json({ data: users });
 });
 
 /** POST /api/users/create — create a user directly with admin-set credentials */
-router.post('/create', authenticate, async (req: Request, res: Response) => {
+router.post('/create', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password) {
@@ -40,7 +45,7 @@ router.post('/create', authenticate, async (req: Request, res: Response) => {
 });
 
 /** POST /api/users/send-credentials — email login details to a newly created user */
-router.post('/send-credentials', authenticate, async (req: Request, res: Response) => {
+router.post('/send-credentials', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
     const { name, email, password } = req.body;
     if (!name || !email || !password) {
@@ -55,7 +60,7 @@ router.post('/send-credentials', authenticate, async (req: Request, res: Respons
 });
 
 /** PATCH /api/users/:id/deactivate — soft-deactivate a user */
-router.patch('/:id/deactivate', authenticate, async (req: Request, res: Response) => {
+router.patch('/:id/deactivate', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
     if (req.params.id === req.user!.userId) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Cannot deactivate your own account' } });
@@ -69,7 +74,7 @@ router.patch('/:id/deactivate', authenticate, async (req: Request, res: Response
 });
 
 /** PATCH /api/users/:id/reactivate — reactivate a user */
-router.patch('/:id/reactivate', authenticate, async (req: Request, res: Response) => {
+router.patch('/:id/reactivate', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
     const user = await usersService.reactivate(req.params.id);
     await logAction({ userId: req.user!.userId, action: 'USER_REACTIVATED', entityType: 'User', entityId: req.params.id, ip: req.ip });
@@ -80,7 +85,7 @@ router.patch('/:id/reactivate', authenticate, async (req: Request, res: Response
 });
 
 /** POST /api/users/:id/reset-password — generate a password-reset link for a user */
-router.post('/:id/reset-password', authenticate, async (req: Request, res: Response) => {
+router.post('/:id/reset-password', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
     const { token, email } = await usersService.generateResetToken(req.params.id);
     const origin = process.env.APP_URL || req.headers.origin || 'http://localhost:3001';
@@ -100,7 +105,7 @@ router.post('/:id/reset-password', authenticate, async (req: Request, res: Respo
 });
 
 /** DELETE /api/users/:id — remove a user */
-router.delete('/:id', authenticate, async (req: Request, res: Response) => {
+router.delete('/:id', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
     if (req.params.id === req.user!.userId) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Cannot delete your own account' } });
@@ -115,15 +120,20 @@ router.delete('/:id', authenticate, async (req: Request, res: Response) => {
 
 // ─── Invite System ─────────────────────────────────────────────────────────────
 
-/** POST /api/users/invite — create an invite (name + email only, no role) */
-router.post('/invite', authenticate, async (req: Request, res: Response) => {
+/** POST /api/users/invite — create an invite with role and optional feature permissions */
+router.post('/invite', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
-    const { email } = req.body;
+    const { email, role, permissions } = req.body;
     if (!email) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'email is required' } });
     }
 
-    const invite = await usersService.createInvite(email, 'ADMIN', req.user!.userId);
+    const resolvedRole: UserRole = VALID_ROLES.includes(role) ? role : 'HR_STAFF';
+    if (role && !VALID_ROLES.includes(role)) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` } });
+    }
+
+    const invite = await usersService.createInvite(email, resolvedRole, req.user!.userId, permissions);
     const origin = process.env.APP_URL || req.headers.origin || 'http://localhost:3001';
     const inviteUrl = `${origin}/invite/${invite.token}`;
 
@@ -144,13 +154,13 @@ router.post('/invite', authenticate, async (req: Request, res: Response) => {
 });
 
 /** GET /api/users/invites — list pending invites */
-router.get('/invites', authenticate, async (req: Request, res: Response) => {
+router.get('/invites', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   const invites = await usersService.getPendingInvites();
   res.json({ data: invites });
 });
 
 /** DELETE /api/users/invites/:id — revoke an invite */
-router.delete('/invites/:id', authenticate, async (req: Request, res: Response) => {
+router.delete('/invites/:id', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
     await usersService.revokeInvite(req.params.id);
     res.json({ data: { revoked: true } });

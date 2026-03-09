@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { callClaude } from '../lib/claudeClient';
-import { cacheGet, cacheSet } from '../lib/redis';
+import { cacheGet, cacheSet, cacheDel } from '../lib/redis';
 import { BAND_ORDER } from '../types/index';
 
 export const performanceService = {
@@ -23,11 +23,13 @@ export const performanceService = {
   },
 
   createRating: async (data: { employeeId: string; cycle: string; rating: number; ratingLabel: string; reviewedBy: string }) => {
-    return prisma.performanceRating.upsert({
+    const result = await prisma.performanceRating.upsert({
       where: { employeeId_cycle: { employeeId: data.employeeId, cycle: data.cycle } },
       update: { rating: data.rating, ratingLabel: data.ratingLabel, reviewedBy: data.reviewedBy },
       create: data,
     });
+    await Promise.allSettled([cacheDel('performance:ai-analysis'), cacheDel('dashboard:action-required')]);
+    return result;
   },
 
   getMatrix: async () => {

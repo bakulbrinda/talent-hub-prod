@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { Gender, WorkMode, EmploymentType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
 import { employeeService } from './employee.service';
+import { BAND_ORDER } from '../types/index';
 import { emitEmployeeImportProgress, emitEmployeeImportComplete } from '../lib/socket';
 import { cacheDel, cacheDelPattern } from '../lib/redis';
 import logger from '../lib/logger';
@@ -254,7 +255,7 @@ const EMPTYPE_MAP: Record<string, string> = {
   intern: 'INTERN', internship: 'INTERN', trainee: 'INTERN', apprentice: 'INTERN',
 };
 
-const VALID_BANDS = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
+const VALID_BANDS: readonly string[] = BAND_ORDER;
 const VALID_GENDERS = ['MALE', 'FEMALE', 'NON_BINARY', 'PREFER_NOT_TO_SAY'];
 
 // Parse salary strings like "12,00,000" / "12.5L" / "12.5 Lakhs" / "1200000"
@@ -498,7 +499,7 @@ export const importService = {
     }
   },
 
-  buildEmployeeData: async (row: ImportRow) => {
+  buildEmployeeData: async (row: ImportRow, managerEmailMap?: Map<string, string>) => {
     const annualFixed = parseSalary(row.annualFixed);
     // Use Zoho-provided breakdown values when available; fallback to standard ratios
     const basic = row.basicAnnual ? parseSalary(row.basicAnnual) : annualFixed * 0.35;
@@ -523,11 +524,16 @@ export const importService = {
 
     let reportingManagerId: string | null = null;
     if (row.reportingManagerEmail?.trim()) {
-      const manager = await prisma.employee.findFirst({
-        where: { email: row.reportingManagerEmail.trim().toLowerCase(), employmentStatus: 'ACTIVE' },
-        select: { id: true },
-      });
-      reportingManagerId = manager?.id ?? null;
+      const normalizedEmail = row.reportingManagerEmail.trim().toLowerCase();
+      if (managerEmailMap) {
+        reportingManagerId = managerEmailMap.get(normalizedEmail) ?? null;
+      } else {
+        const manager = await prisma.employee.findFirst({
+          where: { email: normalizedEmail, employmentStatus: 'ACTIVE' },
+          select: { id: true },
+        });
+        reportingManagerId = manager?.id ?? null;
+      }
     }
 
     const base = {
@@ -597,12 +603,12 @@ export const importService = {
         }),
       ]);
 
-      const BAND_ORDER = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
+      // BAND_ORDER imported from ../types/index
       const now = new Date();
 
       for (const emp of employees) {
         const tenureMonths = Math.floor((now.getTime() - new Date(emp.dateOfJoining).getTime()) / (1000 * 60 * 60 * 24 * 30));
-        const bandIndex = BAND_ORDER.indexOf(emp.band);
+        const bandIndex = (BAND_ORDER as readonly string[]).indexOf(emp.band);
 
         for (const benefit of benefits) {
           const criteria = benefit.eligibilityCriteria as any;
@@ -667,6 +673,18 @@ export const importService = {
     const total = rows.length;
     const BATCH_SIZE = 10;
 
+    // Pre-fetch all manager IDs by email to avoid N+1 queries in the loop (N1 fix)
+    const managerEmails = [...new Set(
+      rows.map(r => r.reportingManagerEmail?.trim().toLowerCase()).filter(Boolean) as string[]
+    )];
+    const managerRows = managerEmails.length > 0
+      ? await prisma.employee.findMany({
+          where: { email: { in: managerEmails }, employmentStatus: 'ACTIVE' },
+          select: { id: true, email: true },
+        })
+      : [];
+    const managerEmailMap = new Map(managerRows.map(m => [m.email, m.id]));
+
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = rows.slice(i, i + BATCH_SIZE);
 
@@ -689,7 +707,7 @@ export const importService = {
         const row = autoRepairRow(rawRow, rowIndex);
 
         try {
-          const data = await importService.buildEmployeeData(row);
+          const data = await importService.buildEmployeeData(row, managerEmailMap);
           // Resolve existing record: try by employeeId first, then by email.
           // This prevents "Unique constraint on email" failures when the CSV
           // contains an employee whose email is already in the DB under a

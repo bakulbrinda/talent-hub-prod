@@ -259,9 +259,9 @@ export const aiInsightsService = {
   getOrGenerate: async (insightType: string, filters?: Record<string, string>) => {
     const filtersHash = filters ? crypto.createHash('md5').update(JSON.stringify(filters)).digest('hex') : 'default';
 
-    // Check cache in DB
+    // Check cache in DB — must match both insightType AND filtersHash
     const existing = await prisma.aiInsight.findFirst({
-      where: { insightType, expiresAt: { gt: new Date() } },
+      where: { insightType, filtersHash, expiresAt: { gt: new Date() } },
       orderBy: { generatedAt: 'desc' },
     });
     if (existing) return existing;
@@ -288,6 +288,7 @@ export const aiInsightsService = {
     return prisma.aiInsight.create({
       data: {
         insightType,
+        filtersHash,
         title: titleMap[insightType] || insightType,
         narrative: result.content,
         data: data as any,

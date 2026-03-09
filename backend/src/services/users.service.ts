@@ -5,7 +5,7 @@
 import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../lib/prisma';
-import { UserRole } from '../types/index';
+import { UserRole, HR_STAFF_DEFAULT_PERMISSIONS } from '../types/index';
 
 export const usersService = {
   /** List all users (admin view) */
@@ -16,6 +16,7 @@ export const usersService = {
         email: true,
         name: true,
         role: true,
+        permissions: true,
         isActive: true,
         lastLoginAt: true,
         createdAt: true,
@@ -29,7 +30,16 @@ export const usersService = {
     return prisma.user.update({
       where: { id: userId },
       data: { role },
-      select: { id: true, email: true, name: true, role: true },
+      select: { id: true, email: true, name: true, role: true, permissions: true },
+    });
+  },
+
+  /** Update a user's feature permissions */
+  updatePermissions: async (userId: string, permissions: string[]) => {
+    return prisma.user.update({
+      where: { id: userId },
+      data: { permissions },
+      select: { id: true, email: true, name: true, role: true, permissions: true },
     });
   },
 
@@ -129,15 +139,19 @@ export const usersService = {
   },
 
   /** Create an invite token for a given email */
-  createInvite: async (email: string, role: UserRole, invitedById: string) => {
+  createInvite: async (email: string, role: UserRole, invitedById: string, permissions?: string[]) => {
     const token = crypto.randomBytes(32).toString('hex');
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
 
-    // Upsert: if email was already invited, refresh the token
+    // Use provided permissions; for HR_STAFF default to role defaults if none given
+    const resolvedPermissions =
+      permissions ?? (role === 'HR_STAFF' ? HR_STAFF_DEFAULT_PERMISSIONS : []);
+
+    // Upsert: if email was already invited, refresh the token and permissions
     return prisma.userInvite.upsert({
       where: { email },
-      create: { email, role, token, invitedById, expiresAt },
-      update: { role, token, invitedById, expiresAt, usedAt: null },
+      create: { email, role, token, invitedById, expiresAt, permissions: resolvedPermissions },
+      update: { role, token, invitedById, expiresAt, usedAt: null, permissions: resolvedPermissions },
     });
   },
 
@@ -176,6 +190,7 @@ export const usersService = {
           name,
           password: hashed,
           role: invite.role,
+          permissions: invite.permissions,
         },
       }),
       prisma.userInvite.update({

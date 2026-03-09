@@ -18,6 +18,8 @@ Full audit performed by 6 parallel agents covering backend services, frontend pa
 | S8 | `backend/src/services/email.service.ts` | 75 | Plaintext password embedded in email body and travels in request body |
 | S9 | `backend/src/middleware/requireRole.ts` | 19 | 403 response leaks user's actual role in message body |
 | S10 | `backend/src/lib/redis.ts` | 24–47 | Cache helpers have no try/catch — Redis failure causes 500s instead of graceful degradation |
+| S11 | `backend/src/routes/salaryBand.routes.ts` | 12–13 | `POST /` and `PUT /:id` have no role guard — any authenticated user can create or overwrite salary bands; only `DELETE /:id` (line 14) is guarded |
+| S12 | `backend/src/routes/jobArchitecture.routes.ts` | 13–14, 17, 20, 27, 30–31 | Seven POST/PUT endpoints unguarded: `POST /job-areas`, `PUT /job-areas/:id`, `POST /job-families`, `POST /bands`, `POST /job-codes`, `POST /skills`, `PUT /skills/:id` — only `PUT /bands/:id` and `DELETE /bands/:id` (lines 21–22) are protected; the rest let any authenticated user modify the org's job architecture |
 
 ### Fixes
 
@@ -26,7 +28,16 @@ Full audit performed by 6 parallel agents covering backend services, frontend pa
 if (!process.env.JWT_SECRET) { logger.error('FATAL: JWT_SECRET not set'); process.exit(1); }
 ```
 
-**S2/S3/S4/S5** — Add `requireRole('ADMIN')` after `authenticate` on all mutating routes. Accept `role` from request body in invite endpoint instead of hardcoding `'ADMIN'`.
+**S2/S3/S4/S5** — Overhauled in fix-plan Task #2. Summary:
+- Add `requireRole('ADMIN')` after `authenticate` on all mutating user management routes (S2).
+- Accept `role` + `permissions[]` from request body in invite endpoint; validate against `UserRole` enum; never hardcode (S3).
+- Add `requireRole('ADMIN')` to `POST /trigger-scan` (S4).
+- Add `requireRole('ADMIN')` to `PATCH /settings/org` and `POST /settings/cache/clear` (S5).
+- New role added: `HR_STAFF` — replaces the overly-restrictive `VIEWER` for operational HR employees.
+- New per-user `permissions String[]` field on `User` model enables granular feature-level access toggled at invite time by Admin or HR Manager.
+- New `requireAccess(feature)` middleware supplements `requireRole` for feature-gated routes.
+- Frontend invite modal gains a feature permission toggle panel (Step 2 of invite flow).
+- See fix-plan.md Task #2 for the full feature key matrix, role capability table, middleware design, and UX specification.
 
 **S6** — Add socket middleware to verify token on handshake:
 ```typescript
@@ -48,6 +59,23 @@ io.use((socket, next) => {
 **S9** — Change to: `message: 'Access denied. Insufficient permissions.'`
 
 **S10** — Wrap each helper in try/catch returning `null` on cacheGet and swallowing errors on cacheSet/cacheDel.
+
+**S11** — `salaryBand.routes.ts`: add `requireRole('ADMIN', 'HR_MANAGER')` to `POST /` and `PUT /:id`:
+```typescript
+router.post('/', requireRole('ADMIN', 'HR_MANAGER'), ctrl.create);
+router.put('/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.update);
+```
+Pattern: guard matches the existing `DELETE /:id` guard on line 14.
+
+**S12** — `jobArchitecture.routes.ts`: add `requireRole('ADMIN', 'HR_MANAGER')` to all seven unguarded write endpoints. The pattern to follow is the existing guards on `PUT /bands/:id` and `DELETE /bands/:id` (lines 21–22). Apply to:
+- `POST /job-areas` (line 13) and `PUT /job-areas/:id` (line 14)
+- `POST /job-families` (line 17)
+- `POST /bands` (line 20)
+- `POST /job-codes` (line 27)
+- `POST /skills` (line 30) and `PUT /skills/:id` (line 31)
+
+`GET` endpoints on all of these remain public to all authenticated users — read access is not restricted.
+Note: S11 and S12 carry no dependency on the HR_STAFF migration (Bundle A). They use only the already-existing `requireRole` middleware and can be patched immediately.
 
 ---
 
@@ -135,7 +163,7 @@ queryClient.invalidateQueries({ queryKey: ['rsu'] });
 
 | ID | File | Line | Issue |
 |----|------|------|-------|
-| T1 | `shared/types/index.ts` | 48 | `UserRole` enum missing `HR_MANAGER` — frontend role checks mishandle HR Manager users |
+| T1 | `shared/types/index.ts` | 48 | `UserRole` enum missing `HR_MANAGER` and new `HR_STAFF` role — frontend role checks mishandle these users; `HR_STAFF_DEFAULT_PERMISSIONS` constant also missing from `shared/constants/index.ts` |
 | T2 | `shared/types/index.ts` | 140–176 | Prisma `Decimal` fields typed as `number` but arrive from API as strings — implicit coercion, fragile |
 | T3 | `shared/constants/index.ts` | 70–74 | `RSU_ELIGIBILITY.MIN_BAND_LEVEL: 4` (P2) contradicts CLAUDE.md (P1 is minimum) |
 | T4 | `frontend/src/pages/BenefitsManagementPage.tsx` | 483 | Renders `e.employee?.designation` but `designation` not selected in `getEnrollments` query — always `undefined` |
@@ -144,7 +172,7 @@ queryClient.invalidateQueries({ queryKey: ['rsu'] });
 
 ### Fixes
 
-**T1** — Add `HR_MANAGER = 'HR_MANAGER'` to `UserRole` enum in `shared/types/index.ts`.
+**T1** — Add `HR_MANAGER = 'HR_MANAGER'` and `HR_STAFF = 'HR_STAFF'` to `UserRole` enum in `shared/types/index.ts`. Add `HR_STAFF_DEFAULT_PERMISSIONS` constant to `shared/constants/index.ts` as the canonical feature key array for the HR_STAFF role. See fix-plan.md Task #4.
 
 **T2** — Type Decimal fields as `number | string` or add a parsing helper; avoid strict `===` comparisons.
 

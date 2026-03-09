@@ -10,9 +10,10 @@ import { queryKeys } from '../lib/queryClient';
 import { cn, formatINR, getInitials, getBandColor } from '../lib/utils';
 import { api } from '../lib/api';
 import AddEmployeeModal from '../components/employees/AddEmployeeModal';
+import { BAND_ORDER } from '@shared/constants/index';
 
 const DEPARTMENTS = ['Engineering', 'Sales', 'Product', 'HR', 'Finance', 'Operations'];
-const BANDS = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
+const BANDS = BAND_ORDER;
 
 function CompaRatioBadge({ value }: { value: number | string | null | undefined }) {
   if (value === null || value === undefined) return <span className="text-xs text-muted-foreground">—</span>;
@@ -43,7 +44,7 @@ export default function EmployeeDirectoryPage() {
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/employees/${id}`),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.employees.all({}) });
+      queryClient.invalidateQueries({ queryKey: ['employees'] });
     },
   });
 

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { notificationsController as ctrl } from '../controllers/notifications.controller';
 import { authenticate } from '../middleware/authenticate';
+import { requireRole } from '../middleware/requireRole';
 import { runProactiveScan } from '../services/aiScan';
 import logger from '../lib/logger';
 
@@ -15,7 +16,7 @@ router.delete('/:id', ctrl.deleteOne);
 
 // Admin-only: manually trigger the proactive AI scan immediately.
 // Useful for demos and testing without waiting for the 1-hour interval.
-router.post('/trigger-scan', async (req, res) => {
+router.post('/trigger-scan', requireRole('ADMIN'), async (req, res) => {
   logger.info(`[AI Scan] Manual trigger by user ${(req as any).user?.userId}`);
   // Fire-and-forget — respond immediately so the UI isn't blocked
   runProactiveScan().catch(err => logger.error('[AI Scan] Manual scan error:', err));

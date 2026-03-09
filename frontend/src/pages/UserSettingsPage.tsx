@@ -111,7 +111,9 @@ export default function UserSettingsPage() {
   ];
 
   const sessionInfo = {
-    lastLogin: new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    lastLogin: user?.lastLoginAt
+      ? new Date(user.lastLoginAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+      : '—',
     email: user?.email ?? '—',
   };
 

@@ -4,6 +4,7 @@ import { Scale, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2 } from 'lu
 import { api } from '../lib/api';
 import { queryKeys, STALE_TIMES } from '../lib/queryClient';
 import { cn, formatINR, getBandColor } from '../lib/utils';
+import { BAND_ORDER } from '@shared/constants/index';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, Legend, Cell,
@@ -30,7 +31,7 @@ const payEquityApi = {
   getOutliers: async () => { const r = await api.get('/pay-equity/outliers'); return r.data; },
 };
 
-const BANDS = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
+const BANDS = BAND_ORDER;
 const DEPARTMENTS = ['Engineering', 'Sales', 'Product', 'HR', 'Finance', 'Operations'];
 
 function heatmapColor(cr: number): string {
@@ -97,7 +98,7 @@ export default function PayEquityPage() {
     staleTime: STALE_TIMES.MEDIUM,
   });
 
-  const { data: outliersRaw } = useQuery({
+  const { data: outliersRaw, isLoading: outliersLoading } = useQuery({
     queryKey: queryKeys.payEquity.outliers,
     queryFn: payEquityApi.getOutliers,
     staleTime: STALE_TIMES.MEDIUM,
@@ -414,8 +415,12 @@ export default function PayEquityPage() {
             </h3>
             <span className="ml-auto text-xs text-muted-foreground">{outliers.length} employees</span>
           </div>
-          {!outliers.length ? (
+          {outliersLoading ? (
             <div className="p-5 space-y-2">{[1,2,3].map(i => <div key={i} className="h-12 bg-muted/40 rounded animate-pulse" />)}</div>
+          ) : !outliers.length ? (
+            <div className="p-10 text-center text-sm text-muted-foreground">
+              No salary outliers detected — all employees are within their band ranges.
+            </div>
           ) : (
             <div className="overflow-x-auto">
               <table className="w-full text-sm">

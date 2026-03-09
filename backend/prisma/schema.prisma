@@ -15,6 +15,7 @@ model User {
   password      String
   name          String
   role          UserRole       @default(ADMIN)
+  permissions   String[]       @default([])
   isActive      Boolean        @default(true)
   lastLoginAt   DateTime?
   createdAt     DateTime       @default(now())
@@ -41,7 +42,8 @@ model RefreshToken {
 model UserInvite {
   id          String    @id @default(uuid())
   email       String    @unique
-  role        UserRole  @default(HR_MANAGER)
+  role        UserRole  @default(HR_STAFF)
+  permissions String[]  @default([])
   token       String    @unique
   invitedById String
   expiresAt   DateTime
@@ -71,8 +73,9 @@ model AuditLog {
 }
 
 enum UserRole {
-  ADMIN       // Full access: manage users, apply scenarios, import data
-  HR_MANAGER  // Read + run scenarios + AI chat (cannot apply, cannot manage users)
+  ADMIN       // Full access: manage users, apply scenarios, import data, all features
+  HR_MANAGER  // Senior HR: near-admin, can run scenarios, manage benefits, import data
+  HR_STAFF    // Operational HR: lenient defaults, feature access configured at invite time
   VIEWER      // Read-only dashboard + AI chat
 }
 
@@ -286,6 +289,7 @@ enum EmploymentStatus {
   ACTIVE
   INACTIVE
   ON_LEAVE
+  TERMINATED
 }
 
 enum Gender {
@@ -561,6 +565,7 @@ enum NotificationSeverity {
 model AiInsight {
   id               String    @id @default(uuid())
   insightType      String
+  filtersHash      String    @default("default")
   title            String
   narrative        String    @db.Text
   data             Json
@@ -572,7 +577,7 @@ model AiInsight {
   completionTokens Int?
   createdAt        DateTime  @default(now())
 
-  @@index([insightType])
+  @@index([insightType, filtersHash])
   @@index([expiresAt])
   @@map("ai_insights")
 }

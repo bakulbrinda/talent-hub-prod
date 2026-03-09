@@ -7,6 +7,8 @@ import {
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useNotificationStore } from '../../store/notificationStore';
+import { useAuthStore } from '../../store/authStore';
+import { HR_STAFF_DEFAULT_PERMISSIONS } from '@shared/constants/index';
 
 function IMochaIcon({ size = 28 }: { size?: number }) {
   const r = 9.5;
@@ -27,6 +29,7 @@ interface NavItem {
   path: string;
   label: string;
   icon: React.ElementType;
+  feature?: string; // if set, item is hidden unless user has this feature key
 }
 
 interface NavGroup {
@@ -42,9 +45,9 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Core',
     icon: LayoutDashboard,
     items: [
-      { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-      { path: '/ai-assistant', label: 'AI Assistant', icon: Sparkles },
-      { path: '/notifications', label: 'Notifications', icon: Bell },
+      { path: '/dashboard',     label: 'Dashboard',    icon: LayoutDashboard, feature: 'dashboard'     },
+      { path: '/ai-assistant',  label: 'AI Assistant', icon: Sparkles,        feature: 'ai_insights'   },
+      { path: '/notifications', label: 'Notifications',icon: Bell,            feature: 'notifications' },
     ],
   },
   {
@@ -52,10 +55,10 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Compensation',
     icon: DollarSign,
     items: [
-      { path: '/salary-bands', label: 'Salary Bands', icon: BarChart3 },
-      { path: '/pay-equity', label: 'Pay Equity', icon: Scale },
-      { path: '/variable-pay', label: 'Variable Pay', icon: Zap },
-      { path: '/scenarios', label: 'Scenarios', icon: FlaskConical },
+      { path: '/salary-bands', label: 'Salary Bands', icon: BarChart3,    feature: 'salary_bands'  },
+      { path: '/pay-equity',   label: 'Pay Equity',   icon: Scale,         feature: 'pay_equity'    },
+      { path: '/variable-pay', label: 'Variable Pay', icon: Zap,           feature: 'variable_pay'  },
+      { path: '/scenarios',    label: 'Scenarios',    icon: FlaskConical,  feature: 'scenario.view' },
     ],
   },
   {
@@ -63,9 +66,9 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'People',
     icon: Users,
     items: [
-      { path: '/employees', label: 'Employees', icon: Users },
-      { path: '/job-architecture', label: 'Job Architecture', icon: Layers },
-      { path: '/performance', label: 'Performance', icon: TrendingUp },
+      { path: '/employees',        label: 'Employees',         icon: Users,    feature: 'employee.view'     },
+      { path: '/job-architecture', label: 'Job Architecture',  icon: Layers                                 },
+      { path: '/performance',      label: 'Performance',       icon: TrendingUp, feature: 'performance.view'},
     ],
   },
   {
@@ -73,7 +76,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Data Center',
     icon: Database,
     items: [
-      { path: '/data-center', label: 'Data Center', icon: Database },
+      { path: '/data-center', label: 'Data Center', icon: Database, feature: 'data_center' },
     ],
   },
   {
@@ -81,8 +84,8 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Benefits',
     icon: Gift,
     items: [
-      { path: '/benefits-hub', label: 'Hub Overview', icon: Building2 },
-      { path: '/benefits', label: 'Benefits & RSU', icon: Gift },
+      { path: '/benefits-hub', label: 'Hub Overview',  icon: Building2, feature: 'benefits.view' },
+      { path: '/benefits',     label: 'Benefits & RSU', icon: Gift,     feature: 'benefits.view' },
     ],
   },
   {
@@ -90,9 +93,9 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Settings',
     icon: Settings,
     items: [
-      { path: '/sent-mails', label: 'Sent Mails', icon: Mail },
-      { path: '/settings/platform', label: 'Platform Settings', icon: Settings },
-      { path: '/settings/user', label: 'User Settings', icon: Users },
+      { path: '/sent-mails',       label: 'Sent Mails',        icon: Mail,     feature: 'email'             },
+      { path: '/settings/platform',label: 'Platform Settings', icon: Settings, feature: 'settings.platform' },
+      { path: '/settings/user',    label: 'User Settings',     icon: Users                                  },
     ],
   },
 ];
@@ -113,6 +116,25 @@ function getActiveGroupId(pathname: string): string {
 export function Sidebar() {
   const location = useLocation();
   const { unreadCount } = useNotificationStore();
+  const user = useAuthStore(s => s.user);
+
+  // Feature-access check (mirrors useAccess logic without a per-item hook call)
+  const canAccess = (feature: string | undefined): boolean => {
+    if (!feature) return true;   // no restriction on this item
+    if (!user) return false;
+    if (user.role === 'ADMIN') return true;
+    const perms =
+      user.permissions && user.permissions.length > 0
+        ? user.permissions
+        : HR_STAFF_DEFAULT_PERMISSIONS;
+    return perms.includes(feature);
+  };
+
+  // Pre-filter groups so collapsed mode (first item NavLink) still works
+  const visibleGroups = NAV_GROUPS.map(g => ({
+    ...g,
+    items: g.items.filter(item => canAccess(item.feature)),
+  })).filter(g => g.items.length > 0);
 
   const activeGroupId = getActiveGroupId(location.pathname);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set([activeGroupId]));
@@ -152,7 +174,7 @@ export function Sidebar() {
       {/* Nav — collapsed mode (icon only, one per group) */}
       <nav className="flex-1 overflow-y-auto py-3 sidebar-scroll group-hover:hidden">
         <ul className="space-y-1 px-2">
-          {NAV_GROUPS.map(group => {
+          {visibleGroups.map(group => {
             const GroupIcon = group.icon;
             const isGroupActive = group.id === activeGroupId;
             const firstPath = group.items[0].path;
@@ -186,7 +208,7 @@ export function Sidebar() {
       {/* Nav — expanded mode (grouped with collapsible headers) */}
       <nav className="flex-1 overflow-y-auto py-2 sidebar-scroll hidden group-hover:block">
         <div className="space-y-1 px-2">
-          {NAV_GROUPS.map(group => {
+          {visibleGroups.map(group => {
             const GroupIcon = group.icon;
             const isGroupActive = group.id === activeGroupId;
             const isExpanded = expandedGroups.has(group.id);

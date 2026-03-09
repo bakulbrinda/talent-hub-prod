@@ -10,24 +10,24 @@ router.use(authenticate);
 router.get('/job-architecture/hierarchy', ctrl.getHierarchy);
 
 router.get('/job-areas', ctrl.getJobAreas);
-router.post('/job-areas', ctrl.createJobArea);
-router.put('/job-areas/:id', ctrl.updateJobArea);
+router.post('/job-areas', requireRole('ADMIN', 'HR_MANAGER'), ctrl.createJobArea);
+router.put('/job-areas/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.updateJobArea);
 
 router.get('/job-families', ctrl.getJobFamilies);
-router.post('/job-families', ctrl.createJobFamily);
+router.post('/job-families', requireRole('ADMIN', 'HR_MANAGER'), ctrl.createJobFamily);
 
 router.get('/bands', ctrl.getBands);
-router.post('/bands', ctrl.createBand);
+router.post('/bands', requireRole('ADMIN', 'HR_MANAGER'), ctrl.createBand);
 router.put('/bands/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.updateBand);
 router.delete('/bands/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.deleteBand);
 
 router.get('/grades', ctrl.getGrades);
 
 router.get('/job-codes', ctrl.getJobCodes);
-router.post('/job-codes', ctrl.createJobCode);
+router.post('/job-codes', requireRole('ADMIN', 'HR_MANAGER'), ctrl.createJobCode);
 
 router.get('/skills', ctrl.getSkills);
-router.post('/skills', ctrl.createSkill);
-router.put('/skills/:id', ctrl.updateSkill);
+router.post('/skills', requireRole('ADMIN', 'HR_MANAGER'), ctrl.createSkill);
+router.put('/skills/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.updateSkill);
 
 export default router;

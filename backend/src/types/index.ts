@@ -1,13 +1,38 @@
 // Backend-local type definitions (extracted from shared/ to eliminate cross-package imports)
 
-export type UserRole = 'ADMIN' | 'HR_MANAGER' | 'VIEWER';
+export type UserRole = 'ADMIN' | 'HR_MANAGER' | 'HR_STAFF' | 'VIEWER';
 
 export interface AuthUser {
   id: string;
   email: string;
   name: string;
   role: UserRole;
+  permissions?: string[];
+  lastLoginAt?: string | null;
 }
+
+// ─── Feature Permission Keys ──────────────────────────────────
+// Keep in sync with shared/constants/index.ts FEATURE_KEYS and HR_STAFF_DEFAULT_PERMISSIONS.
+export const HR_STAFF_DEFAULT_PERMISSIONS: string[] = [
+  'dashboard',
+  'employee.view',
+  'employee.manage',
+  'employee.delete',
+  'pay_equity',
+  'salary_bands',
+  'scenario.view',
+  'scenario.run',
+  'benefits.view',
+  'benefits.manage',
+  'variable_pay',
+  'performance.view',
+  'performance.manage',
+  'ai_insights',
+  'data_center',
+  'notifications',
+  'email',
+  // Excluded: scenario.apply, ai_scan, audit_log, user.manage, settings.platform
+];
 
 // ─── Socket Payload Types ─────────────────────────────────────
 
@@ -83,5 +108,4 @@ export const SOCKET_EVENTS = {
   SALARY_BAND_UPDATED:   'salary:band:updated',
   IMPORT_PROGRESS:       'import:progress',
   IMPORT_COMPLETE:       'import:complete',
-  DATA_REFRESH_MODULES:  'data:refresh:modules',
 } as const;

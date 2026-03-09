@@ -4,6 +4,7 @@
 
 import { Router, Request, Response } from 'express';
 import { authenticate } from '../middleware/authenticate';
+import { requireRole } from '../middleware/requireRole';
 import { prisma } from '../lib/prisma';
 import { cacheDelPattern } from '../lib/redis';
 
@@ -27,7 +28,7 @@ router.get('/org', async (_req: Request, res: Response) => {
 });
 
 /** PATCH /api/settings/org — update org config */
-router.patch('/org', async (req: Request, res: Response) => {
+router.patch('/org', requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
     const {
       orgName,
@@ -62,7 +63,7 @@ router.patch('/org', async (req: Request, res: Response) => {
 });
 
 /** POST /api/settings/cache/clear — bust AI + dashboard Redis caches */
-router.post('/cache/clear', async (_req: Request, res: Response) => {
+router.post('/cache/clear', requireRole('ADMIN'), async (_req: Request, res: Response) => {
   try {
     await Promise.allSettled([
       cacheDelPattern('ai:*'),

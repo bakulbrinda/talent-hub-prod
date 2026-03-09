@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/authenticate';
+import { requireAccess } from '../middleware/requireAccess';
 import { scenariosController } from '../controllers/scenarios.controller';
 
 const router = Router();
@@ -12,6 +13,6 @@ router.get('/:id', scenariosController.getById);
 router.put('/:id', scenariosController.update);
 router.delete('/:id', scenariosController.delete);
 router.post('/:id/run', scenariosController.run);
-router.post('/:id/apply', scenariosController.apply);
+router.post('/:id/apply', requireAccess('scenario.apply'), scenariosController.apply);
 
 export default router;

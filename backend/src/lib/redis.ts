@@ -21,28 +21,45 @@ redisClient.on('connect', () => {
 });
 
 // ─── Cache Helpers ────────────────────────────────────────────
+// All helpers are wrapped in try/catch so a Redis outage degrades gracefully:
+// cacheGet returns null (triggers re-computation), cacheSet/cacheDel/cacheDelPattern
+// log and continue so callers are never blocked by a cache failure (S10 fix).
+
 export const cacheGet = async <T>(key: string): Promise<T | null> => {
-  const value = await redisClient.get(key);
-  if (!value) return null;
   try {
+    const value = await redisClient.get(key);
+    if (!value) return null;
     return JSON.parse(value) as T;
-  } catch {
+  } catch (err: any) {
+    logger.warn(`cacheGet failed for key "${key}":`, err.message);
     return null;
   }
 };
 
 export const cacheSet = async (key: string, value: unknown, ttlSeconds: number): Promise<void> => {
-  await redisClient.setex(key, ttlSeconds, JSON.stringify(value));
+  try {
+    await redisClient.setex(key, ttlSeconds, JSON.stringify(value));
+  } catch (err: any) {
+    logger.warn(`cacheSet failed for key "${key}":`, err.message);
+  }
 };
 
 export const cacheDel = async (key: string): Promise<void> => {
-  await redisClient.del(key);
+  try {
+    await redisClient.del(key);
+  } catch (err: any) {
+    logger.warn(`cacheDel failed for key "${key}":`, err.message);
+  }
 };
 
 export const cacheDelPattern = async (pattern: string): Promise<void> => {
-  const keys = await redisClient.keys(pattern);
-  if (keys.length > 0) {
-    await redisClient.del(...keys);
+  try {
+    const keys = await redisClient.keys(pattern);
+    if (keys.length > 0) {
+      await redisClient.del(...keys);
+    }
+  } catch (err: any) {
+    logger.warn(`cacheDelPattern failed for pattern "${pattern}":`, err.message);
   }
 };
 

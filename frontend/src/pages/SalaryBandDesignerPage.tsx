@@ -48,7 +48,6 @@ const EMPTY_FORM = { bandId: '', bandCode: '', jobAreaId: '', minSalary: '', mid
 
 export default function SalaryBandDesignerPage() {
   const [activeTab, setActiveTab] = useState<TabId>('chart');
-  const [selectedBand, setSelectedBand] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [aiBandSuggestions, setAiBandSuggestions] = useState<any[]>([]);
@@ -356,7 +355,7 @@ export default function SalaryBandDesignerPage() {
                       </td>
                       <td className="py-2 px-1 text-center">
                         <button
-                          onClick={() => { setSelectedBand(row.band); setActiveTab('editor'); }}
+                          onClick={() => { setActiveTab('editor'); }}
                           className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                         >
                           <Edit2 className="w-3.5 h-3.5" />
