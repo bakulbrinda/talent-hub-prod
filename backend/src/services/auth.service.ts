@@ -11,7 +11,7 @@ const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 
 export const authService = {
   async login(email: string, password: string) {
-    const user = await prisma.user.findUnique({ where: { email } });
+    const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     if (!user) throw unauthorized('Invalid email or password');
 
     if (!user.isActive) throw unauthorized('Your account has been deactivated. Contact your admin.');
