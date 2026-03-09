@@ -49,13 +49,15 @@ export default function PlatformSettingsPage() {
   const [directForm, setDirectForm] = useState({ name: '', email: '', password: '' });
   const [directLoading, setDirectLoading] = useState(false);
 
-  // Invite modal state (Bundle E — 3-step flow)
+  // Invite modal state (3-step flow: details → permissions → confirmation)
   const [inviteStep, setInviteStep] = useState<1 | 2 | 3>(1);
+  const [inviteName, setInviteName] = useState('');
   const [inviteEmail, setInviteEmail] = useState('');
+  const [invitePassword, setInvitePassword] = useState('');
+  const [showInvitePassword, setShowInvitePassword] = useState(false);
   const [inviteRole, setInviteRole] = useState<InviteRole>('HR_STAFF');
   const [invitePerms, setInvitePerms] = useState<string[]>([...HR_STAFF_DEFAULT_PERMISSIONS]);
   const [inviteSending, setInviteSending] = useState(false);
-  const [inviteUrl, setInviteUrl] = useState<string | null>(null);
 
   const handleInviteTogglePerm = (key: string) => {
     setInvitePerms(prev =>
@@ -63,19 +65,30 @@ export default function PlatformSettingsPage() {
     );
   };
 
-  const handleSendInvite = async () => {
-    if (!inviteEmail.trim()) return;
+  const handleCreateAccount = async () => {
+    if (!inviteName.trim() || !inviteEmail.trim() || invitePassword.length < 8) return;
     setInviteSending(true);
     try {
-      const body: Record<string, unknown> = { email: inviteEmail.trim(), role: inviteRole };
+      const body: Record<string, unknown> = {
+        name: inviteName.trim(),
+        email: inviteEmail.trim(),
+        password: invitePassword,
+        role: inviteRole,
+      };
       if (inviteRole === 'HR_STAFF') body.permissions = invitePerms;
-      const r = await api.post('/users/invite', body);
-      setInviteUrl(r.data?.data?.inviteUrl ?? null);
+      await api.post('/users/create', body);
+      // Send credentials email (non-blocking — don't fail if SMTP is unconfigured)
+      api.post('/users/send-credentials', {
+        name: inviteName.trim(),
+        email: inviteEmail.trim(),
+        password: invitePassword,
+      }).catch(() => {});
+      qc.invalidateQueries({ queryKey: ['platform-users'] });
       qc.invalidateQueries({ queryKey: ['platform-invites'] });
-      toast.success(`Invite sent to ${inviteEmail.trim()}`);
+      toast.success(`Account created for ${inviteEmail.trim()}`);
       setInviteStep(3);
     } catch (err: any) {
-      toast.error(err.response?.data?.error?.message ?? 'Failed to send invite');
+      toast.error(err.response?.data?.error?.message ?? 'Failed to create account');
     } finally {
       setInviteSending(false);
     }
@@ -83,10 +96,12 @@ export default function PlatformSettingsPage() {
 
   const resetInviteFlow = () => {
     setInviteStep(1);
+    setInviteName('');
     setInviteEmail('');
+    setInvitePassword('');
+    setShowInvitePassword(false);
     setInviteRole('HR_STAFF');
     setInvitePerms([...HR_STAFF_DEFAULT_PERMISSIONS]);
-    setInviteUrl(null);
   };
   const [createdCreds, setCreatedCreds] = useState<{ name: string; email: string; password: string } | null>(() => {
     try { const s = sessionStorage.getItem('th:lastCreatedCreds'); return s ? JSON.parse(s) : null; } catch { return null; }
@@ -439,9 +454,19 @@ export default function PlatformSettingsPage() {
                   )}
                 </div>
 
-                {/* Step 1: Email + Role */}
+                {/* Step 1: Name + Email + Password + Role */}
                 {inviteStep === 1 && (
                   <div className="space-y-4">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Full name</label>
+                      <input
+                        type="text"
+                        value={inviteName}
+                        onChange={e => setInviteName(e.target.value)}
+                        placeholder="Jane Smith"
+                        className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                      />
+                    </div>
                     <div>
                       <label className="text-xs font-medium text-muted-foreground">Email address</label>
                       <input
@@ -451,6 +476,25 @@ export default function PlatformSettingsPage() {
                         placeholder="jane@company.com"
                         className="mt-1 w-full px-3 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
                       />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Password (min 8 characters)</label>
+                      <div className="mt-1 relative">
+                        <input
+                          type={showInvitePassword ? 'text' : 'password'}
+                          value={invitePassword}
+                          onChange={e => setInvitePassword(e.target.value)}
+                          placeholder="Set a login password"
+                          className="w-full px-3 py-2 pr-9 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowInvitePassword(s => !s)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                        >
+                          {showInvitePassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
                     </div>
                     <div>
                       <label className="text-xs font-medium text-muted-foreground mb-2 block">Role</label>
@@ -476,12 +520,12 @@ export default function PlatformSettingsPage() {
                       </div>
                     </div>
                     <button
-                      onClick={() => inviteRole === 'ADMIN' ? setInviteStep(3) : setInviteStep(2)}
-                      disabled={!inviteEmail.trim()}
+                      onClick={() => inviteRole === 'ADMIN' ? handleCreateAccount() : setInviteStep(2)}
+                      disabled={!inviteName.trim() || !inviteEmail.trim() || invitePassword.length < 8 || inviteSending}
                       className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
                     >
-                      {inviteRole === 'ADMIN' ? <Send className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
-                      {inviteRole === 'ADMIN' ? 'Send invite' : 'Configure access →'}
+                      {inviteSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : inviteRole === 'ADMIN' ? <UserPlus className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                      {inviteSending ? 'Creating…' : inviteRole === 'ADMIN' ? 'Create account & send credentials' : 'Configure access →'}
                     </button>
                   </div>
                 )}
@@ -521,69 +565,54 @@ export default function PlatformSettingsPage() {
                         className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground transition-colors"
                       >← Back</button>
                       <button
-                        onClick={handleSendInvite}
+                        onClick={handleCreateAccount}
                         disabled={inviteSending}
                         className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
                       >
-                        {inviteSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                        {inviteSending ? 'Sending…' : 'Send invite'}
+                        {inviteSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserPlus className="w-3.5 h-3.5" />}
+                        {inviteSending ? 'Creating…' : 'Create account & send credentials'}
                       </button>
                     </div>
                   </div>
                 )}
 
-                {/* Step 3: Confirmation */}
+                {/* Step 3: Success — show credentials */}
                 {inviteStep === 3 && (
                   <div className="space-y-4">
-                    {inviteUrl ? (
-                      <>
-                        <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                          <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium text-green-700 dark:text-green-400">Invite sent to {inviteEmail}</p>
-                            <p className="text-xs text-green-600/80 dark:text-green-500/80 mt-0.5">Role: {inviteRole} · Expires in 7 days</p>
-                          </div>
+                    <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                      <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-green-700 dark:text-green-400">Account created for {inviteEmail}</p>
+                        <p className="text-xs text-green-600/80 dark:text-green-500/80 mt-0.5">Role: {inviteRole} · Credentials emailed</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-[10px] font-medium text-muted-foreground">Login credentials (share directly if email fails)</p>
+                      <div className="flex flex-wrap gap-2">
+                        <div className="flex items-center gap-1.5 bg-muted/50 rounded-lg px-2.5 py-1.5 border border-border text-xs">
+                          <span className="text-muted-foreground">Email:</span>
+                          <span className="font-medium text-foreground">{inviteEmail}</span>
+                          <button onClick={() => { navigator.clipboard.writeText(inviteEmail); toast.success('Copied!'); }} className="text-muted-foreground hover:text-foreground">
+                            <Copy className="w-3 h-3" />
+                          </button>
                         </div>
-                        <div>
-                          <p className="text-[10px] font-medium text-muted-foreground mb-1">Invite link (share if email fails)</p>
-                          <div className="flex items-center gap-2 p-2 rounded-lg bg-muted/50 border border-border">
-                            <code className="flex-1 text-[10px] text-foreground break-all">{inviteUrl}</code>
-                            <button
-                              onClick={() => { navigator.clipboard.writeText(inviteUrl); toast.success('Link copied!'); }}
-                              className="flex-shrink-0 p-1 rounded hover:bg-muted transition-colors"
-                            >
-                              <Copy className="w-3.5 h-3.5 text-muted-foreground" />
-                            </button>
-                          </div>
-                        </div>
-                      </>
-                    ) : (
-                      // Admin path: step 1 → step 3 directly, need to send
-                      <div className="space-y-3">
-                        <p className="text-sm text-foreground">
-                          Send an invite to <strong>{inviteEmail}</strong> as <strong>{inviteRole}</strong>?
-                        </p>
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setInviteStep(1)}
-                            className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground transition-colors"
-                          >← Back</button>
-                          <button
-                            onClick={handleSendInvite}
-                            disabled={inviteSending}
-                            className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
-                          >
-                            {inviteSending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
-                            {inviteSending ? 'Sending…' : 'Confirm & send invite'}
+                        <div className="flex items-center gap-1.5 bg-muted/50 rounded-lg px-2.5 py-1.5 border border-border text-xs">
+                          <span className="text-muted-foreground">Password:</span>
+                          <span className="font-medium font-mono text-foreground">{showInvitePassword ? invitePassword : '••••••••'}</span>
+                          <button onClick={() => setShowInvitePassword(s => !s)} className="text-muted-foreground hover:text-foreground">
+                            {showInvitePassword ? <EyeOff className="w-3 h-3" /> : <Eye className="w-3 h-3" />}
+                          </button>
+                          <button onClick={() => { navigator.clipboard.writeText(invitePassword); toast.success('Password copied!'); }} className="text-muted-foreground hover:text-foreground">
+                            <Copy className="w-3 h-3" />
                           </button>
                         </div>
                       </div>
-                    )}
+                    </div>
                     <button
                       onClick={resetInviteFlow}
                       className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      + Invite another person
+                      + Add another team member
                     </button>
                   </div>
                 )}

@@ -28,7 +28,7 @@ router.get('/', authenticate, requireRole('ADMIN'), async (req: Request, res: Re
 /** POST /api/users/create — create a user directly with admin-set credentials */
 router.post('/create', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
-    const { name, email, password, role } = req.body;
+    const { name, email, password, role, permissions } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'name, email, and password are required' } });
     }
@@ -36,7 +36,7 @@ router.post('/create', authenticate, requireRole('ADMIN'), async (req: Request, 
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Password must be at least 8 characters' } });
     }
     const resolvedRole: UserRole = VALID_ROLES.includes(role) ? role : 'HR_STAFF';
-    const user = await usersService.createDirect(name, email, password, resolvedRole);
+    const user = await usersService.createDirect(name, email, password, resolvedRole, Array.isArray(permissions) ? permissions : undefined);
     await logAction({ userId: req.user!.userId, action: 'USER_CREATED', entityType: 'User', entityId: user.id, ip: req.ip });
     logger.info(`[Users] Created account for ${email}`);
     res.status(201).json({ data: user });

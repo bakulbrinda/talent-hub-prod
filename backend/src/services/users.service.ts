@@ -77,7 +77,7 @@ export const usersService = {
   // ─── Invite System ─────────────────────────────────────────────
 
   /** Create a user directly with admin-set credentials */
-  createDirect: async (name: string, email: string, password: string, role: UserRole = 'HR_STAFF') => {
+  createDirect: async (name: string, email: string, password: string, role: UserRole = 'HR_STAFF', permissions?: string[]) => {
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       const err = new Error('An account with this email already exists') as any;
@@ -86,7 +86,7 @@ export const usersService = {
     }
     const hashed = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
-      data: { name: name.trim(), email: email.trim().toLowerCase(), password: hashed, role },
+      data: { name: name.trim(), email: email.trim().toLowerCase(), password: hashed, role, ...(permissions ? { permissions } : {}) },
       select: { id: true, email: true, name: true, role: true, isActive: true },
     });
     // Mark any pending invite for this email as used
