@@ -47,15 +47,18 @@ app.use(helmet({
 const allowedOrigins = [
   'http://localhost:5173',
   'http://localhost:4173',
+  'http://localhost:5179',
   process.env.FRONTEND_URL,
 ].filter(Boolean) as string[];
 
 app.use(cors({
   origin: (origin, callback) => {
-    if (!origin) return callback(null, true); // curl / Postman / mobile
-    if (!process.env.FRONTEND_URL) return callback(null, true); // tunnel mode: allow all
+    if (!origin) return callback(null, true); // curl / Postman / server-side
+    if (!process.env.FRONTEND_URL) return callback(null, true); // tunnel / dev mode: allow all
+    if (origin.endsWith('.trycloudflare.com')) return callback(null, true); // Cloudflare tunnels
     if (allowedOrigins.includes(origin)) return callback(null, true);
-    callback(new Error(`CORS: origin ${origin} not allowed`));
+    // Deny without throwing — browser enforces CORS, server returns 403 not 500
+    return callback(null, false);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
