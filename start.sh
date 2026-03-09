@@ -32,6 +32,15 @@ for svc in cloudflared backend frontend; do
   fi
 done
 
+# ── Kill any orphan process already on port 3001 ─────────────
+# (handles case where backend was started manually, not via start.sh)
+ORPHAN=$(lsof -ti :3001 2>/dev/null || true)
+if [ -n "$ORPHAN" ]; then
+  echo -e "${YELLOW}⚠${NC}  Port 3001 in use (PID $ORPHAN) — killing before restart..."
+  kill "$ORPHAN" 2>/dev/null || true
+  sleep 1
+fi
+
 # ── Install cloudflared if missing ────────────────────────────
 if ! command -v cloudflared &>/dev/null; then
   info "cloudflared not found — installing via Homebrew..."
