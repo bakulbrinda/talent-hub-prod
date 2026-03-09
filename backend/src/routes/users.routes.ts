@@ -52,7 +52,7 @@ router.post('/send-credentials', authenticate, requireRole('ADMIN'), async (req:
     if (!name || !email || !password) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'name, email, and password are required' } });
     }
-    const platformUrl = process.env.APP_URL || req.headers.origin || 'http://localhost:3001';
+    const platformUrl = req.headers.origin || process.env.APP_URL || 'http://localhost:5179';
     await emailService.sendCredentialsEmail(email, name, email, password, platformUrl);
     res.json({ data: { sent: true } });
   } catch (err: any) {
@@ -89,7 +89,7 @@ router.patch('/:id/reactivate', authenticate, requireRole('ADMIN'), async (req: 
 router.post('/:id/reset-password', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
     const { token, email } = await usersService.generateResetToken(req.params.id, req.user!.userId);
-    const origin = process.env.APP_URL || req.headers.origin || 'http://localhost:3001';
+    const origin = req.headers.origin || process.env.APP_URL || 'http://localhost:5179';
     const resetUrl = `${origin}/invite/${token}`;
     await logAction({ userId: req.user!.userId, action: 'USER_RESET_PASSWORD', entityType: 'User', entityId: req.params.id, ip: req.ip });
     logger.info(`[Reset] Generated reset link for ${email}`);
@@ -135,7 +135,7 @@ router.post('/invite', authenticate, requireRole('ADMIN'), async (req: Request, 
     }
 
     const invite = await usersService.createInvite(email, resolvedRole, req.user!.userId, permissions);
-    const origin = process.env.APP_URL || req.headers.origin || 'http://localhost:3001';
+    const origin = req.headers.origin || process.env.APP_URL || 'http://localhost:5179';
     const inviteUrl = `${origin}/invite/${invite.token}`;
 
     await logAction({ userId: req.user!.userId, action: 'USER_INVITED', entityType: 'UserInvite', entityId: invite.id, metadata: { email }, ip: req.ip });
