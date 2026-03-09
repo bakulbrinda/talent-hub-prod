@@ -49,9 +49,9 @@ if ! command -v cloudflared &>/dev/null; then
 fi
 
 # ── Cloudflare Tunnel ─────────────────────────────────────────
-info "Starting Cloudflare tunnel..."
+info "Starting Cloudflare tunnel (targeting Vite dev server on port 5179)..."
 > "$CF_LOG"
-cloudflared tunnel --url http://localhost:3001 >> "$CF_LOG" 2>&1 &
+cloudflared tunnel --url http://localhost:5179 >> "$CF_LOG" 2>&1 &
 echo $! > "$LOG_DIR/cloudflared.pid"
 
 echo "   Waiting for tunnel URL (up to 30 s)..."

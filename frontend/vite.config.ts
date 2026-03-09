@@ -14,6 +14,8 @@ export default defineConfig({
   },
   server: {
     port: 5179,
+    // Allow Cloudflare tunnel hostnames (*.trycloudflare.com) to reach the dev server
+    allowedHosts: ['localhost', '.trycloudflare.com'],
     proxy: {
       '/api': {
         target: DEV_API,
