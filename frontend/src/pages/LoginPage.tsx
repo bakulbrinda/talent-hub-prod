@@ -20,8 +20,7 @@ export default function LoginPage() {
   const { isAuthenticated } = useAuthStore();
   const loginMutation = useLogin();
 
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
-
+  // useForm must be called unconditionally — hooks cannot appear after an early return
   const {
     register,
     handleSubmit,
@@ -30,6 +29,8 @@ export default function LoginPage() {
     resolver: zodResolver(loginSchema),
     defaultValues: { email: '', password: '' },
   });
+
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />;
 
   return (
     <>
