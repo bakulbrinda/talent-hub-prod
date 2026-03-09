@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────
 # Talent Hub — Stop Script
-# Gracefully stops backend and frontend started by start.sh.
+# Gracefully stops cloudflared, backend, and frontend.
 # ─────────────────────────────────────────────────────────────
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
@@ -12,7 +12,7 @@ stop_process() {
   local pid_file="$LOG_DIR/$name.pid"
 
   if [ ! -f "$pid_file" ]; then
-    echo "   $name: no PID file found (already stopped?)"
+    echo "   $name: no PID file (already stopped?)"
     return
   fi
 
@@ -21,7 +21,6 @@ stop_process() {
 
   if kill -0 "$pid" 2>/dev/null; then
     kill "$pid" 2>/dev/null
-    # Wait up to 5s for graceful exit, then force-kill
     local tries=0
     while kill -0 "$pid" 2>/dev/null && [ $tries -lt 5 ]; do
       sleep 1
@@ -43,5 +42,6 @@ stop_process() {
 echo "■  Stopping Talent Hub..."
 stop_process "frontend"
 stop_process "backend"
+stop_process "cloudflared"
 echo ""
 echo "All services stopped."
