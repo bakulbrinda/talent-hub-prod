@@ -77,7 +77,7 @@ export const usersService = {
   // ─── Invite System ─────────────────────────────────────────────
 
   /** Create a user directly with admin-set credentials */
-  createDirect: async (name: string, email: string, password: string) => {
+  createDirect: async (name: string, email: string, password: string, role: UserRole = 'HR_STAFF') => {
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       const err = new Error('An account with this email already exists') as any;
@@ -86,8 +86,8 @@ export const usersService = {
     }
     const hashed = await bcrypt.hash(password, 12);
     const user = await prisma.user.create({
-      data: { name: name.trim(), email: email.trim().toLowerCase(), password: hashed },
-      select: { id: true, email: true, name: true, isActive: true },
+      data: { name: name.trim(), email: email.trim().toLowerCase(), password: hashed, role },
+      select: { id: true, email: true, name: true, role: true, isActive: true },
     });
     // Mark any pending invite for this email as used
     await prisma.userInvite.updateMany({
@@ -98,7 +98,7 @@ export const usersService = {
   },
 
   /** Generate a password-reset link for an existing user */
-  generateResetToken: async (userId: string) => {
+  generateResetToken: async (userId: string, adminId: string) => {
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (!user) {
       const err = new Error('User not found') as any;
@@ -109,8 +109,8 @@ export const usersService = {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await prisma.userInvite.upsert({
       where: { email: user.email },
-      create: { email: user.email, role: user.role, token, invitedById: userId, expiresAt },
-      update: { token, invitedById: userId, expiresAt, usedAt: null },
+      create: { email: user.email, role: user.role, token, invitedById: adminId, expiresAt },
+      update: { token, invitedById: adminId, expiresAt, usedAt: null },
     });
     return { token, email: user.email };
   },

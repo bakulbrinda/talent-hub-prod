@@ -28,14 +28,15 @@ router.get('/', authenticate, requireRole('ADMIN'), async (req: Request, res: Re
 /** POST /api/users/create — create a user directly with admin-set credentials */
 router.post('/create', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
     if (!name || !email || !password) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'name, email, and password are required' } });
     }
     if (password.length < 8) {
       return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Password must be at least 8 characters' } });
     }
-    const user = await usersService.createDirect(name, email, password);
+    const resolvedRole: UserRole = VALID_ROLES.includes(role) ? role : 'HR_STAFF';
+    const user = await usersService.createDirect(name, email, password, resolvedRole);
     await logAction({ userId: req.user!.userId, action: 'USER_CREATED', entityType: 'User', entityId: user.id, ip: req.ip });
     logger.info(`[Users] Created account for ${email}`);
     res.status(201).json({ data: user });
@@ -87,7 +88,7 @@ router.patch('/:id/reactivate', authenticate, requireRole('ADMIN'), async (req: 
 /** POST /api/users/:id/reset-password — generate a password-reset link for a user */
 router.post('/:id/reset-password', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {
-    const { token, email } = await usersService.generateResetToken(req.params.id);
+    const { token, email } = await usersService.generateResetToken(req.params.id, req.user!.userId);
     const origin = process.env.APP_URL || req.headers.origin || 'http://localhost:3001';
     const resetUrl = `${origin}/invite/${token}`;
     await logAction({ userId: req.user!.userId, action: 'USER_RESET_PASSWORD', entityType: 'User', entityId: req.params.id, ip: req.ip });

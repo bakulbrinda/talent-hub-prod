@@ -72,25 +72,26 @@ export const emailService = {
   // NOTE: password is intentionally NOT included in the email body (S8 security fix).
   // The user must set their own password via the reset flow.
   sendCredentialsEmail: async (to: string, name: string, email: string, _password: string, platformUrl: string): Promise<void> => {
-    const resetUrl = `${platformUrl}/reset-password`;
+    const loginUrl = `${platformUrl}/login`;
     const body = `
       <p style="margin:0 0 16px;color:#4b5563">
-        Hi <strong>${name}</strong>, your <strong>Talent Hub</strong> account has been set up.
+        Hi <strong>${name}</strong>, your <strong>Talent Hub</strong> account has been set up by your admin.
       </p>
       <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:16px 0">
         <table style="width:100%;font-size:14px;border-collapse:collapse">
           <tr><td style="color:#6b7280;padding:8px 0;width:120px">Platform URL</td><td style="font-weight:600"><a href="${platformUrl}" style="color:#4f46e5">${platformUrl}</a></td></tr>
           <tr><td style="color:#6b7280;padding:8px 0">Email (Login ID)</td><td style="font-weight:600">${email}</td></tr>
+          <tr><td style="color:#6b7280;padding:8px 0">Password</td><td style="color:#4b5563">Set by your admin — ask them directly</td></tr>
         </table>
       </div>
-      <p style="margin:0 0 16px;color:#4b5563">Use the button below to set your password and log in for the first time:</p>
+      <p style="margin:0 0 16px;color:#4b5563">Use the button below to log in:</p>
       <div style="text-align:center;margin:28px 0">
-        <a href="${resetUrl}" style="background:#4f46e5;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">
-          Set my password →
+        <a href="${loginUrl}" style="background:#4f46e5;color:#fff;padding:12px 28px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px;display:inline-block">
+          Log in to Talent Hub →
         </a>
       </div>
       <div style="margin-top:20px;padding:12px 16px;background:#f0fdf4;border-left:3px solid #22c55e;border-radius:4px;font-size:12px;color:#166534">
-        For security, your password is never sent by email. Set it directly on the platform.
+        For security, passwords are never sent by email. Your admin will share it with you directly.
       </div>`;
 
     await sendEmail({
