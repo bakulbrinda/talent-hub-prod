@@ -223,6 +223,29 @@ function UploadCard({
 
 export default function DataCenterPage() {
   const queryClient = useQueryClient();
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportFullReport = async () => {
+    setExporting(true);
+    try {
+      const res = await api.get('/export/full-report', { responseType: 'blob' });
+      const dateStr = new Date().toISOString().slice(0, 10);
+      const url = URL.createObjectURL(new Blob([res.data], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }));
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `talenthub-export-${dateStr}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Report downloaded successfully');
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error?.message ?? 'Failed to generate report');
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const { data: catalogRaw } = useQuery({
     queryKey: ['benefits', 'catalog'],
     queryFn: () => api.get('/benefits/catalog').then(r => r.data?.data ?? []),
@@ -269,6 +292,46 @@ export default function DataCenterPage() {
             queryClient.invalidateQueries({ queryKey: ['benefits'] });
           }}
         />
+      </div>
+
+      {/* Export Full Report */}
+      <div className="rounded-xl border border-border bg-card p-6">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Download className="w-4 h-4 text-primary" />
+              Export Full Report
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1 max-w-md">
+              Download an Excel workbook with all employee, compensation, and benefits data
+              plus an AI-generated summary for each section — useful as a timestamped archive
+              before uploading a fresh data file.
+            </p>
+            <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground list-disc list-inside">
+              <li>Sheet 1 — AI Summary (People · Compensation · Benefits)</li>
+              <li>Sheet 2 — All Employees (every field, all statuses)</li>
+              <li>Sheet 3 — Compensation Rollup (Band × Department)</li>
+              <li>Sheet 4 — Benefits Enrollments (Active · Expired · Claimed)</li>
+            </ul>
+          </div>
+          <button
+            onClick={handleExportFullReport}
+            disabled={exporting}
+            className="flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            {exporting ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Generating…
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                Generate &amp; Download
+              </>
+            )}
+          </button>
+        </div>
       </div>
 
       {/* Reference card */}

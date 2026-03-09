@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate } from '../middleware/authenticate';
 import { prisma } from '../lib/prisma';
+import { generateFullReport } from '../services/fullReportExport.service';
 
 const router = Router();
 router.use(authenticate);
@@ -114,6 +115,17 @@ router.get('/scenarios/:id/csv', async (req: Request, res: Response, next: NextF
     const safeName = scenario.name.replace(/\s+/g, '-');
     res.setHeader('Content-Disposition', `attachment; filename="scenario-${safeName}.json"`);
     res.json({ scenario, exportedAt: new Date().toISOString() });
+  } catch (e) { next(e); }
+});
+
+// ─── Full Report Export (Excel + AI Summary) ──────────────────
+router.get('/full-report', async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const buffer = await generateFullReport();
+    const dateStr = new Date().toISOString().slice(0, 10);
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.setHeader('Content-Disposition', `attachment; filename="talenthub-export-${dateStr}.xlsx"`);
+    res.send(buffer);
   } catch (e) { next(e); }
 });
 
