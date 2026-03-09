@@ -25,6 +25,7 @@ const UserSettingsPage = lazy(() => import('./pages/UserSettingsPage'));
 const AIAssistantPage = lazy(() => import('./pages/AIAssistantPage'));
 const SentMailsPage = lazy(() => import('./pages/SentMailsPage'));
 const DataCenterPage = lazy(() => import('./pages/DataCenterPage'));
+const AcceptInvitePage = lazy(() => import('./pages/AcceptInvitePage'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-screen bg-background">
@@ -39,8 +40,9 @@ function AppRoutes() {
   return (
     <Suspense fallback={<PageLoader />}>
       <Routes>
-        {/* Public route */}
+        {/* Public routes */}
         <Route path="/login" element={<LoginPage />} />
+        <Route path="/invite/:token" element={<AcceptInvitePage />} />
 
         {/* Protected routes wrapped in AppShell */}
         <Route

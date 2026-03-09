@@ -41,6 +41,12 @@ export const emailService = {
       <p style="margin:0 0 16px;color:#4b5563">
         You've been invited to join <strong>Talent Hub</strong> — your organisation's compensation intelligence platform.
       </p>
+      <div style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;padding:20px;margin:16px 0">
+        <table style="width:100%;font-size:14px;border-collapse:collapse">
+          <tr><td style="color:#6b7280;padding:8px 0;width:120px">Login Email</td><td style="font-weight:600">${to}</td></tr>
+          <tr><td style="color:#6b7280;padding:8px 0">Password</td><td style="color:#4b5563">You'll set this when you accept the invite</td></tr>
+        </table>
+      </div>
       <p style="margin:0 0 20px;color:#4b5563">
         Click the button below to set up your account. This link is valid for <strong>7 days</strong>.
       </p>
