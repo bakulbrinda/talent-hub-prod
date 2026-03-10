@@ -64,8 +64,16 @@ export const cacheDelPattern = async (pattern: string): Promise<void> => {
 };
 
 // ─── Pub/Sub Clients (for Socket.io Redis Adapter) ────────────
+// IMPORTANT: These MUST have error listeners. Without them, a dropped Redis
+// connection emits an unhandled 'error' event which crashes the Node.js process.
 export const pubClient = new Redis(process.env.REDIS_URL || 'redis://localhost:6379', {
   lazyConnect: true,
 });
+pubClient.on('error', (err) => {
+  logger.error('Redis pubClient error:', err.message);
+});
 
 export const subClient = pubClient.duplicate();
+subClient.on('error', (err) => {
+  logger.error('Redis subClient error:', err.message);
+});

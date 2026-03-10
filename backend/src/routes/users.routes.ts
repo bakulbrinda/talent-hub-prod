@@ -60,6 +60,42 @@ router.post('/send-credentials', authenticate, requireRole('ADMIN'), async (req:
   }
 });
 
+/** PATCH /api/users/:id/role — change a user's role */
+router.patch('/:id/role', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
+  try {
+    if (req.params.id === req.user!.userId) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Cannot change your own role' } });
+    }
+    const { role } = req.body;
+    if (!VALID_ROLES.includes(role)) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}` } });
+    }
+    const user = await usersService.updateRole(req.params.id, role);
+    await logAction({ userId: req.user!.userId, action: 'USER_ROLE_UPDATED', entityType: 'User', entityId: req.params.id, metadata: { role }, ip: req.ip });
+    res.json({ data: user });
+  } catch (err: any) {
+    res.status(err.statusCode || 500).json({ error: { code: 'INTERNAL', message: err.message } });
+  }
+});
+
+/** PATCH /api/users/:id/permissions — update a user's feature permissions */
+router.patch('/:id/permissions', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
+  try {
+    if (req.params.id === req.user!.userId) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'Cannot change your own permissions' } });
+    }
+    const { permissions } = req.body;
+    if (!Array.isArray(permissions)) {
+      return res.status(400).json({ error: { code: 'BAD_REQUEST', message: 'permissions must be an array' } });
+    }
+    const user = await usersService.updatePermissions(req.params.id, permissions);
+    await logAction({ userId: req.user!.userId, action: 'USER_PERMISSIONS_UPDATED', entityType: 'User', entityId: req.params.id, metadata: { permissions }, ip: req.ip });
+    res.json({ data: user });
+  } catch (err: any) {
+    res.status(err.statusCode || 500).json({ error: { code: 'INTERNAL', message: err.message } });
+  }
+});
+
 /** PATCH /api/users/:id/deactivate — soft-deactivate a user */
 router.patch('/:id/deactivate', authenticate, requireRole('ADMIN'), async (req: Request, res: Response) => {
   try {

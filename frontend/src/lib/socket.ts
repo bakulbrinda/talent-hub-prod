@@ -1,9 +1,9 @@
 import { io, Socket } from 'socket.io-client';
 
-// In dev: connect to localhost:3001 directly (Vite doesn't proxy WebSocket for socket.io).
-// In tunnel/production: connect to the same origin (Express serves everything on one port).
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL ||
-  (import.meta.env.DEV ? 'http://localhost:3001' : window.location.origin);
+// Always connect via the page origin so Vite's ws proxy (/socket.io) handles it in dev.
+// Direct localhost:3001 in DEV mode breaks when accessed via HTTPS (Cloudflare tunnel
+// mixed-content block) and is unnecessary since vite.config.ts proxies /socket.io → ws.
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin;
 
 let socket: Socket | null = null;
 

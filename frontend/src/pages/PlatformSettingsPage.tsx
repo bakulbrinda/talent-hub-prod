@@ -113,6 +113,12 @@ export default function PlatformSettingsPage() {
   const [actionLoading, setActionLoading] = useState<Record<string, boolean>>({});
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
 
+  // Inline permission editor state
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [editRole, setEditRole] = useState<string>('HR_STAFF');
+  const [editPerms, setEditPerms] = useState<string[]>([]);
+  const [savingPerms, setSavingPerms] = useState(false);
+
   // Org tab state
   const [orgSaving, setOrgSaving] = useState(false);
   const [orgForm, setOrgForm] = useState<{
@@ -269,6 +275,27 @@ export default function PlatformSettingsPage() {
       toast.error('Failed to remove user');
     } finally {
       setLoading(userId, 'delete', false);
+    }
+  };
+
+  const openPermEditor = (u: any) => {
+    setEditingUserId(u.id);
+    setEditRole(u.role);
+    setEditPerms(Array.isArray(u.permissions) ? u.permissions : []);
+  };
+
+  const handleSavePerms = async (userId: string) => {
+    setSavingPerms(true);
+    try {
+      await api.patch(`/users/${userId}/role`, { role: editRole });
+      await api.patch(`/users/${userId}/permissions`, { permissions: editPerms });
+      qc.invalidateQueries({ queryKey: ['platform-users'] });
+      toast.success('Permissions updated');
+      setEditingUserId(null);
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message ?? 'Failed to update permissions');
+    } finally {
+      setSavingPerms(false);
     }
   };
 
@@ -656,6 +683,21 @@ export default function PlatformSettingsPage() {
                           )}
                         </div>
                         <div className="flex items-center gap-1">
+                          {/* Edit role & permissions */}
+                          {u.id !== me?.id && (
+                            <button
+                              onClick={() => editingUserId === u.id ? setEditingUserId(null) : openPermEditor(u)}
+                              title="Edit role & permissions"
+                              className={cn(
+                                'p-1.5 rounded-lg transition-colors',
+                                editingUserId === u.id
+                                  ? 'text-primary bg-primary/10'
+                                  : 'text-muted-foreground hover:text-primary hover:bg-primary/10',
+                              )}
+                            >
+                              <Settings className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                           {/* Reset password */}
                           <button
                             onClick={() => handleResetPassword(u.id)}
@@ -713,6 +755,78 @@ export default function PlatformSettingsPage() {
                           </button>
                         </div>
                       )}
+                      {/* Inline role & permissions editor */}
+                      {editingUserId === u.id && (
+                        <div className="ml-12 mt-2 rounded-lg border border-primary/20 bg-primary/5 p-4 space-y-4">
+                          <p className="text-[10px] font-semibold uppercase tracking-wider text-primary">Edit Role & Permissions</p>
+
+                          {/* Role selector */}
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-2">Role</p>
+                            <div className="flex flex-wrap gap-2">
+                              {(['ADMIN', 'HR_MANAGER', 'HR_STAFF', 'VIEWER'] as const).map(r => (
+                                <button
+                                  key={r}
+                                  onClick={() => { setEditRole(r); if (r !== 'HR_STAFF') setEditPerms([]); }}
+                                  className={cn(
+                                    'px-3 py-1.5 rounded-lg text-xs font-medium border-2 transition-all',
+                                    editRole === r ? 'border-primary bg-primary/10 text-primary' : 'border-border text-muted-foreground hover:border-muted-foreground/40',
+                                  )}
+                                >
+                                  {r === 'ADMIN' ? 'Admin' : r === 'HR_MANAGER' ? 'HR Manager' : r === 'HR_STAFF' ? 'HR Staff' : 'Viewer'}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {/* Feature permissions — only for non-admin roles */}
+                          {editRole === 'HR_STAFF' && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground mb-2">Feature Access</p>
+                              <div className="space-y-3">
+                                {Array.from(new Set(INVITE_FEATURES.map(f => f.group))).map(group => (
+                                  <div key={group}>
+                                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1">{group}</p>
+                                    <div className="space-y-0.5">
+                                      {INVITE_FEATURES.filter(f => f.group === group).map(feat => {
+                                        const on = editPerms.includes(feat.key);
+                                        return (
+                                          <button
+                                            key={feat.key}
+                                            onClick={() => setEditPerms(prev => on ? prev.filter(k => k !== feat.key) : [...prev, feat.key])}
+                                            className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-background/80 transition-colors"
+                                          >
+                                            <span className="text-xs text-foreground">{feat.label}</span>
+                                            {on
+                                              ? <ToggleRight className="w-4 h-4 text-primary flex-shrink-0" />
+                                              : <ToggleLeft className="w-4 h-4 text-muted-foreground flex-shrink-0" />}
+                                          </button>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+
+                          <div className="flex items-center gap-2 pt-1">
+                            <button
+                              onClick={() => setEditingUserId(null)}
+                              className="px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground transition-colors"
+                            >Cancel</button>
+                            <button
+                              onClick={() => handleSavePerms(u.id)}
+                              disabled={savingPerms}
+                              className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
+                            >
+                              {savingPerms ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
+                              {savingPerms ? 'Saving…' : 'Save changes'}
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
                       {/* Credentials strip — shown for the last-created user until dismissed */}
                       {createdCreds && u.email === createdCreds.email && (
                         <div className="ml-12 mt-1 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-900/10 p-3 space-y-2">

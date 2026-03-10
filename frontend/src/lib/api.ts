@@ -30,6 +30,9 @@ export const setAccessToken = (token: string): void => {
 export const clearTokens = (): void => {
   sessionStorage.removeItem('accessToken');
   sessionStorage.removeItem('refreshToken');
+  // Clear Zustand persist key from sessionStorage — if left behind, the stale
+  // isAuthenticated:true state causes an infinite redirect loop after hard reload.
+  sessionStorage.removeItem('compsense-auth');
   // Also clear any old localStorage remnants from previous builds
   localStorage.removeItem('accessToken');
   localStorage.removeItem('refreshToken');
