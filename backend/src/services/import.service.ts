@@ -2,11 +2,11 @@ import { parse } from 'csv-parse/sync';
 import * as XLSX from 'xlsx';
 import { Gender, WorkMode, EmploymentType } from '@prisma/client';
 import { prisma } from '../lib/prisma';
-import { employeeService } from './employee.service';
 import { BAND_ORDER } from '../types/index';
 import { emitEmployeeImportProgress, emitEmployeeImportComplete } from '../lib/socket';
 import { cacheDel, cacheDelPattern } from '../lib/redis';
 import logger from '../lib/logger';
+import { getAiInferredPerformance } from './aiPerformanceInference';
 
 export interface ImportRow {
   employeeId: string;
@@ -361,11 +361,13 @@ function autoRepairRow(row: ImportRow, rowIndex: number): ImportRow {
     r.employeeId = `EMP-${prefix}-${String(_autoIdCounter++).padStart(4, '0')}`;
   }
 
-  // 3. email — auto-generate
+  // 3. email — auto-generate, using employee ID as suffix to guarantee uniqueness
   if (!r.email || !String(r.email).trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(r.email)) {
-    const fn = (r.firstName || 'emp').toLowerCase().replace(/[^a-z0-9]/g, '');
-    const ln = (r.lastName || String(rowIndex)).toLowerCase().replace(/[^a-z0-9]/g, '');
-    r.email = `${fn}.${ln}@company.com`;
+    // Fallback to 'emp'/'unknown' if stripping special chars produces an empty string
+    const fn = (r.firstName || 'emp').toLowerCase().replace(/[^a-z0-9]/g, '') || 'emp';
+    const ln = (r.lastName || String(rowIndex)).toLowerCase().replace(/[^a-z0-9]/g, '') || String(rowIndex + 1);
+    const uid = String(r.employeeId || rowIndex + 1).toLowerCase().replace(/[^a-z0-9]/g, '');
+    r.email = `${fn}.${ln}.${uid}@company.com`;
   }
 
   // 4. annualFixed — fall back to annualCtc then variablePay, then 500000
@@ -430,42 +432,48 @@ function ratingFromIncrement(pct: number): { rating: number; label: string } {
   return { rating: 2.0, label: 'Needs Improvement' };
 }
 
-async function createRatingsFromRevisions(employeeId: string, row: ImportRow): Promise<void> {
-  const allCycles = [
-    { cycle: 'April 2023', value: row.april2023 ? parseSalary(row.april2023) : null },
-    { cycle: 'July 2023',  value: row.july2023  ? parseSalary(row.july2023)  : null },
-    { cycle: 'April 2024', value: row.april2024 ? parseSalary(row.april2024) : null },
-    { cycle: 'July 2024',  value: row.july2024  ? parseSalary(row.july2024)  : null },
-  ];
-  const cycles = allCycles
-    .filter(c => c.value !== null && (c.value as number) > 0)
-    .map(c => ({ cycle: c.cycle, value: c.value as number }));
+// Batch version: collects all rating rows and bulk-inserts at the end of import
+async function batchCreateRatingsFromRevisions(
+  queue: { employeeId: string; row: ImportRow }[]
+): Promise<void> {
+  const toCreate: { employeeId: string; cycle: string; rating: number; ratingLabel: string }[] = [];
 
-  if (cycles.length === 0) return;
+  for (const { employeeId, row } of queue) {
+    const allCycles = [
+      { cycle: 'April 2023', value: row.april2023 ? parseSalary(row.april2023) : null },
+      { cycle: 'July 2023',  value: row.july2023  ? parseSalary(row.july2023)  : null },
+      { cycle: 'April 2024', value: row.april2024 ? parseSalary(row.april2024) : null },
+      { cycle: 'July 2024',  value: row.july2024  ? parseSalary(row.july2024)  : null },
+    ];
+    const cycles = allCycles
+      .filter(c => c.value !== null && (c.value as number) > 0)
+      .map(c => ({ cycle: c.cycle, value: c.value as number }));
 
-  for (let i = 0; i < cycles.length; i++) {
-    const curr = cycles[i];
-    const prev = cycles[i - 1];
-    let ratingData: { rating: number; label: string };
-
-    if (prev) {
-      const incrementPct = ((curr.value - prev.value) / prev.value) * 100;
-      ratingData = ratingFromIncrement(incrementPct);
-    } else {
-      // First cycle — no prior to compare; use a neutral default
-      ratingData = { rating: 3.0, label: 'Meets Expectations' };
-    }
-
-    try {
-      await prisma.performanceRating.upsert({
-        where: { employeeId_cycle: { employeeId, cycle: curr.cycle } },
-        update: { rating: ratingData.rating, ratingLabel: ratingData.label },
-        create: { employeeId, cycle: curr.cycle, rating: ratingData.rating, ratingLabel: ratingData.label },
-      });
-    } catch (err) {
-      logger.warn(`Could not create performance rating for ${employeeId} cycle ${curr.cycle}:`, err);
+    for (let i = 0; i < cycles.length; i++) {
+      const curr = cycles[i];
+      const prev = cycles[i - 1];
+      const ratingData = prev
+        ? ratingFromIncrement(((curr.value - prev.value) / prev.value) * 100)
+        : { rating: 3.0, label: 'Meets Expectations' };
+      toCreate.push({ employeeId, cycle: curr.cycle, rating: ratingData.rating, ratingLabel: ratingData.label });
     }
   }
+
+  if (toCreate.length === 0) return;
+
+  // createMany in chunks — skipDuplicates handles re-imports gracefully
+  const CHUNK = 1000;
+  for (let i = 0; i < toCreate.length; i += CHUNK) {
+    try {
+      await prisma.performanceRating.createMany({
+        data: toCreate.slice(i, i + CHUNK),
+        skipDuplicates: true,
+      });
+    } catch (err) {
+      logger.warn('Batch rating insert error (non-fatal):', err);
+    }
+  }
+  logger.info(`Batch-inserted ${toCreate.length} performance ratings`);
 }
 
 export const importService = {
@@ -507,7 +515,7 @@ export const importService = {
     const lta = row.lta ? parseSalary(row.lta) : annualFixed * 0.05;
     const pf = row.pfYearly ? parseSalary(row.pfYearly) : basic * 0.12;
     const specialAllowance = row.specialAllowance ? parseSalary(row.specialAllowance) : annualFixed - basic - hra - lta;
-    const variablePay = row.variablePay ? parseSalary(row.variablePay) : annualFixed * 0.10;
+    const variablePay = (row.variablePay !== undefined && row.variablePay !== '') ? parseSalary(row.variablePay) : 0;
     const annualCtc = row.annualCtc ? parseSalary(row.annualCtc) : annualFixed + variablePay + pf;
     const retentionBonus = row.retentionBonus ? parseSalary(row.retentionBonus) : 0;
     const joiningBonus = row.joiningBonus ? parseSalary(row.joiningBonus) : 0;
@@ -603,8 +611,11 @@ export const importService = {
         }),
       ]);
 
-      // BAND_ORDER imported from ../types/index
       const now = new Date();
+      const enrollments: {
+        employeeId: string; benefitId: string; enrolledAt: Date;
+        status: 'ACTIVE'; utilizationPercent: number; utilizedValue: number;
+      }[] = [];
 
       for (const emp of employees) {
         const tenureMonths = Math.floor((now.getTime() - new Date(emp.dateOfJoining).getTime()) / (1000 * 60 * 60 * 24 * 30));
@@ -612,7 +623,6 @@ export const importService = {
 
         for (const benefit of benefits) {
           const criteria = benefit.eligibilityCriteria as any;
-          // Skip performance-based benefits — no perf data yet after import
           if (criteria?.minPerformanceRating !== undefined) continue;
           if (criteria?.employmentTypes && !criteria.employmentTypes.includes(emp.employmentType)) continue;
           if (criteria?.genders && !criteria.genders.includes(emp.gender)) continue;
@@ -620,17 +630,75 @@ export const importService = {
           if (criteria?.minBandLevel !== undefined && bandIndex < criteria.minBandLevel) continue;
           if (criteria?.minTenureMonths !== undefined && tenureMonths < criteria.minTenureMonths) continue;
 
-          await prisma.employeeBenefit.upsert({
-            where: { employeeId_benefitId: { employeeId: emp.id, benefitId: benefit.id } },
-            update: {},
-            create: { employeeId: emp.id, benefitId: benefit.id, enrolledAt: now, status: 'ACTIVE', utilizationPercent: 0, utilizedValue: 0 },
+          enrollments.push({
+            employeeId: emp.id, benefitId: benefit.id,
+            enrolledAt: now, status: 'ACTIVE', utilizationPercent: 0, utilizedValue: 0,
           });
         }
       }
-      logger.info(`Auto-enrolled benefits for ${employees.length} imported employees`);
+
+      // Bulk insert — skipDuplicates handles re-imports (replaces thousands of individual upserts)
+      const CHUNK = 1000;
+      for (let i = 0; i < enrollments.length; i += CHUNK) {
+        await prisma.employeeBenefit.createMany({
+          data: enrollments.slice(i, i + CHUNK),
+          skipDuplicates: true,
+        });
+      }
+      logger.info(`Auto-enrolled ${enrollments.length} benefit records for ${employees.length} imported employees`);
     } catch (err) {
       logger.warn('Benefits auto-enrollment error (non-fatal):', err);
     }
+  },
+
+  batchComputeDerivedFields: async (employeeIds: string[]): Promise<void> => {
+    if (employeeIds.length === 0) return;
+
+    // Load salary bands once — if none defined yet, only compute timeInCurrentGrade
+    const salaryBandRows = await prisma.salaryBand.findMany({
+      include: { band: true },
+    });
+    const bandMap = new Map(salaryBandRows.map(sb => [sb.band.code, sb]));
+
+    const employees = await prisma.employee.findMany({
+      where: { id: { in: employeeIds } },
+      select: { id: true, band: true, annualFixed: true, dateOfJoining: true },
+    });
+
+    const now = new Date();
+    const updates = employees.map(emp => {
+      const sb = bandMap.get(emp.band);
+      const annualFixed = Number(emp.annualFixed);
+      const timeInCurrentGrade = Math.floor(
+        (now.getTime() - new Date(emp.dateOfJoining).getTime()) / (1000 * 60 * 60 * 24 * 30)
+      );
+      if (!sb) return { id: emp.id, compaRatio: null, payRangePenetration: null, timeInCurrentGrade };
+
+      const mid = Number(sb.midSalary);
+      const min = Number(sb.minSalary);
+      const max = Number(sb.maxSalary);
+      const compaRatio = mid > 0 ? (annualFixed / mid) * 100 : null;
+      const payRangePenetration = max > min ? ((annualFixed - min) / (max - min)) * 100 : null;
+      return { id: emp.id, compaRatio, payRangePenetration, timeInCurrentGrade };
+    });
+
+    // Parallel updates in chunks of 50 to stay within Neon connection limits
+    const CHUNK = 50;
+    for (let i = 0; i < updates.length; i += CHUNK) {
+      await Promise.all(
+        updates.slice(i, i + CHUNK).map(u =>
+          prisma.employee.update({
+            where: { id: u.id },
+            data: {
+              ...(u.compaRatio !== null && { compaRatio: u.compaRatio }),
+              ...(u.payRangePenetration !== null && { payRangePenetration: u.payRangePenetration }),
+              timeInCurrentGrade: u.timeInCurrentGrade,
+            },
+          })
+        )
+      );
+    }
+    logger.info(`Batch computed derived fields for ${updates.length} employees`);
   },
 
   invalidateAllCaches: async () => {
@@ -665,15 +733,15 @@ export const importService = {
       await prisma.employee.deleteMany();
     }
 
-    _autoIdCounter = 1; // reset counter for this import batch
+    _autoIdCounter = 1;
     const allErrors: ImportError[] = [];
     const importedIds: string[] = [];
     let imported = 0;
     let failed = 0;
     const total = rows.length;
-    const BATCH_SIZE = 10;
+    const PARALLEL = 25; // concurrent DB writes per batch
 
-    // Pre-fetch all manager IDs by email to avoid N+1 queries in the loop (N1 fix)
+    // ── 1. Pre-fetch manager email → ID map (one query, not N) ──────────────
     const managerEmails = [...new Set(
       rows.map(r => r.reportingManagerEmail?.trim().toLowerCase()).filter(Boolean) as string[]
     )];
@@ -685,67 +753,143 @@ export const importService = {
       : [];
     const managerEmailMap = new Map(managerRows.map(m => [m.email, m.id]));
 
-    for (let i = 0; i < rows.length; i += BATCH_SIZE) {
-      const batch = rows.slice(i, i + BATCH_SIZE);
+    // ── 2. Pre-fetch all existing employees in bulk (eliminates 2 findUnique per row) ──
+    const allCsvEmployeeIds = rows.map(r => String(r.employeeId || '').trim()).filter(Boolean);
+    const allCsvEmails     = rows.map(r => String(r.email || '').trim().toLowerCase()).filter(Boolean);
 
-      for (let j = 0; j < batch.length; j++) {
-        const rawRow = batch[j];
-        const rowIndex = i + j;
+    const [prefetchedByEmpId, prefetchedByEmail] = await Promise.all([
+      allCsvEmployeeIds.length > 0
+        ? prisma.employee.findMany({
+            where: { employeeId: { in: allCsvEmployeeIds } },
+            select: { id: true, employeeId: true },
+          })
+        : [],
+      allCsvEmails.length > 0
+        ? prisma.employee.findMany({
+            where: { email: { in: allCsvEmails } },
+            select: { id: true, email: true },
+          })
+        : [],
+    ]);
 
-        // Check if row has ANY usable content — skip completely blank rows
-        const hasName = rawRow.firstName?.trim() || rawRow.lastName?.trim();
-        const hasSalary = parseSalary(rawRow.annualFixed) > 0
-          || parseSalary(rawRow.annualCtc) > 0
-          || parseSalary(rawRow.variablePay) > 0;
+    const existingByEmpId = new Map(prefetchedByEmpId.map(e => [e.employeeId, e.id]));
+    const existingByEmail  = new Map(prefetchedByEmail.map(e => [e.email, e.id]));
 
-        if (!hasName && !hasSalary) {
-          // Truly empty row — skip silently
-          continue;
-        }
+    // ── 3. Filter, auto-repair, and deduplicate emails within the CSV ────────
+    const validRows: { row: ImportRow; index: number }[] = [];
+    const seenEmailsInCsv = new Map<string, number>(); // email → count of times seen
 
-        // Auto-repair missing fields
-        const row = autoRepairRow(rawRow, rowIndex);
+    for (let i = 0; i < rows.length; i++) {
+      const rawRow = rows[i];
+      const hasName   = rawRow.firstName?.trim() || rawRow.lastName?.trim();
+      const hasSalary = parseSalary(rawRow.annualFixed) > 0
+        || parseSalary(rawRow.annualCtc) > 0
+        || parseSalary(rawRow.variablePay) > 0;
+      if (!hasName && !hasSalary) continue; // truly blank — skip silently
 
-        try {
+      const repairedRow = autoRepairRow(rawRow, i);
+
+      // Deduplicate emails within the CSV: if the same email appears more than
+      // once, append a numeric suffix so each row gets a unique email address.
+      // This handles real-world data where two employees share a name pattern
+      // (e.g., two "Priya Sharma" → priya.sharma@co.com and priya.sharma.2@co.com).
+      const baseEmail = repairedRow.email.toLowerCase();
+      const count = (seenEmailsInCsv.get(baseEmail) || 0) + 1;
+      seenEmailsInCsv.set(baseEmail, count);
+      if (count > 1) {
+        const [local, domain] = baseEmail.split('@');
+        repairedRow.email = `${local}.${count}@${domain}`;
+      }
+
+      validRows.push({ row: repairedRow, index: i });
+    }
+
+    // ── 4. Collect rating data for batch insert after all writes ─────────────
+    const ratingQueue: { employeeId: string; row: ImportRow }[] = [];
+
+    // ── 5. Process in parallel batches of PARALLEL rows ─────────────────────
+    for (let i = 0; i < validRows.length; i += PARALLEL) {
+      const chunk = validRows.slice(i, i + PARALLEL);
+
+      const results = await Promise.allSettled(
+        chunk.map(async ({ row }) => {
           const data = await importService.buildEmployeeData(row, managerEmailMap);
-          // Resolve existing record: try by employeeId first, then by email.
-          // This prevents "Unique constraint on email" failures when the CSV
-          // contains an employee whose email is already in the DB under a
-          // different employeeId (e.g. leftover seed data).
-          let existingId: string | null = null;
-          const byEmpId = await prisma.employee.findUnique({ where: { employeeId: data.employeeId }, select: { id: true } });
-          if (byEmpId) {
-            existingId = byEmpId.id;
-          } else {
-            const byEmail = await prisma.employee.findUnique({ where: { email: data.email }, select: { id: true } });
-            if (byEmail) existingId = byEmail.id;
-          }
+
+          // Use pre-fetched maps — no per-row findUnique calls
+          const empIdKey   = String(data.employeeId).trim();
+          const existingId = existingByEmpId.get(empIdKey) ?? existingByEmail.get(data.email) ?? null;
+
           const employee = existingId
             ? await prisma.employee.update({ where: { id: existingId }, data })
             : await prisma.employee.create({ data });
-          await employeeService.computeAndUpdateDerivedFields(employee.id);
-          await createRatingsFromRevisions(employee.id, row);
+
+          return { employee, row };
+        })
+      );
+
+      for (let j = 0; j < results.length; j++) {
+        const result  = results[j];
+        const { index } = chunk[j];
+
+        if (result.status === 'fulfilled') {
+          const { employee, row } = result.value;
           importedIds.push(employee.id);
           imported++;
-        } catch (err: any) {
-          const msg = err?.message?.includes('Unique constraint')
-            ? `Duplicate email: ${row.email}`
-            : (err?.message || 'Database error');
-          allErrors.push({ row: rowIndex + 2, field: 'general', message: msg });
-          failed++;
-          logger.warn(`Row ${rowIndex + 2} failed: ${msg}`);
-        }
+          // Update in-memory maps so later batches can reference newly-created employees
+          existingByEmpId.set(employee.employeeId, employee.id);
+          existingByEmail.set(employee.email, employee.id);
+          ratingQueue.push({ employeeId: employee.id, row });
+        } else {
+          const err = result.reason as any;
+          const isEmailConflict = err?.message?.includes('Unique constraint') &&
+            (err?.meta?.target?.includes('email') || err?.message?.toLowerCase().includes('email'));
 
-        if ((j + 1) % BATCH_SIZE === 0 || j === batch.length - 1) {
-          emitEmployeeImportProgress({ processed: i + j + 1, total, errors: allErrors });
+          if (isEmailConflict) {
+            // Race condition: email already taken (e.g., parallel batch processed same email).
+            // Retry once with a disambiguated email suffix.
+            try {
+              const row = chunk[j].row;
+              const data = await importService.buildEmployeeData(row, managerEmailMap);
+              const [local, domain] = data.email.split('@');
+              data.email = `${local}.x${index + 2}@${domain}`;
+              const employee = await prisma.employee.create({ data });
+              importedIds.push(employee.id);
+              imported++;
+              existingByEmpId.set(employee.employeeId, employee.id);
+              existingByEmail.set(employee.email, employee.id);
+              ratingQueue.push({ employeeId: employee.id, row });
+              logger.info(`Row ${index + 2}: email conflict resolved — saved as ${employee.email}`);
+            } catch (retryErr: any) {
+              allErrors.push({ row: index + 2, field: 'email', message: `Email conflict (retry failed): ${err?.message}` });
+              failed++;
+            }
+          } else {
+            const msg = err?.message || 'Database error';
+            allErrors.push({ row: index + 2, field: 'general', message: msg });
+            failed++;
+            logger.warn(`Row ${index + 2} failed: ${msg}`);
+          }
         }
       }
+
+      emitEmployeeImportProgress({ processed: Math.min(i + PARALLEL, total), total, errors: allErrors });
     }
 
-    // Auto-enroll employees in eligible benefits
+    // ── 6. Batch compute derived fields (compa-ratio, tenure) ────────────────
+    await importService.batchComputeDerivedFields(importedIds);
+
+    // ── 7. Batch insert performance ratings from revision cycles ─────────────
+    await batchCreateRatingsFromRevisions(ratingQueue);
+
+    // ── 8. Auto-enroll in benefits (bulk createMany) ─────────────────────────
     await importService.autoEnrollBenefits(importedIds);
 
     await importService.invalidateAllCaches();
+
+    // Background-warm the AI performance inference cache so the Performance page
+    // is ready immediately when the user navigates there after import.
+    // Fire-and-forget — errors are already logged inside getAiInferredPerformance.
+    getAiInferredPerformance().catch(() => {});
 
     const result: ImportResult = { imported, failed, errors: allErrors, replaced: mode === 'replace', detectedColumns };
     emitEmployeeImportComplete(result);

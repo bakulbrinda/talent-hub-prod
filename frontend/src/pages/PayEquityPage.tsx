@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Scale, TrendingDown, TrendingUp, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -32,7 +32,6 @@ const payEquityApi = {
 };
 
 const BANDS = BAND_ORDER;
-const DEPARTMENTS = ['Engineering', 'Sales', 'Product', 'HR', 'Finance', 'Operations'];
 
 function heatmapColor(cr: number): string {
   if (cr < 70) return '#ef4444';
@@ -91,6 +90,13 @@ export default function PayEquityPage() {
     queryFn: payEquityApi.getHeatmap,
     staleTime: STALE_TIMES.MEDIUM,
   });
+
+  // Derive departments from actual heatmap data (not JobArea table — employee dept strings
+  // may differ from JobArea names, causing every cell to show "—").
+  const DEPARTMENTS: string[] = useMemo(() => {
+    const heatmapArr: any[] = (heatmapRaw as any)?.data ?? (Array.isArray(heatmapRaw) ? heatmapRaw : []);
+    return [...new Set(heatmapArr.map((r: any) => r.department).filter(Boolean))].sort() as string[];
+  }, [heatmapRaw]);
 
   const { data: distRaw } = useQuery({
     queryKey: queryKeys.payEquity.distribution(),

@@ -1,9 +1,11 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Upload, Download, Users, Gift, CheckCircle2, XCircle, Loader2, FileSpreadsheet } from 'lucide-react';
+import { Upload, Download, Users, Gift, CheckCircle2, XCircle, Loader2, FileSpreadsheet, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { api } from '../lib/api';
+import { getSocket } from '../lib/socket';
 import { cn } from '../lib/utils';
+import { useAuthStore } from '../store/authStore';
 
 interface UploadResult {
   imported?: number;
@@ -14,6 +16,9 @@ interface UploadResult {
   total?: number;
 }
 
+interface ImportProgress { processed: number; total: number; }
+interface ImportComplete { imported: number; updated?: number; failed?: number; errors: { row: number; message: string }[]; }
+
 interface UploadCardProps {
   title: string;
   description: string;
@@ -21,7 +26,9 @@ interface UploadCardProps {
   templateLabel: string;
   templateHref: string;
   uploadEndpoint: string;
-  acceptModes?: boolean; // show replace/upsert toggle (employee only)
+  acceptModes?: boolean;
+  progressEvent?: string;
+  completeEvent?: string;
   onUploadComplete?: () => void;
 }
 
@@ -33,13 +40,71 @@ function UploadCard({
   templateHref,
   uploadEndpoint,
   acceptModes = false,
+  progressEvent,
+  completeEvent,
   onUploadComplete,
 }: UploadCardProps) {
   const [mode, setMode] = useState<'upsert' | 'replace'>('upsert');
   const [uploading, setUploading] = useState(false);
   const [result, setResult] = useState<UploadResult | null>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [progress, setProgress] = useState<ImportProgress | null>(null);
+  const [importComplete, setImportComplete] = useState<ImportComplete | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { isAuthenticated } = useAuthStore();
+
+  // Subscribe to socket events — retry until socket is available (it's initialised
+  // by useSocket() in AppShell whose effect runs after children, so getSocket()
+  // may return null on the first render).
+  useEffect(() => {
+    if (!progressEvent || !completeEvent || !isAuthenticated) return;
+
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const onProgress = (data: ImportProgress) => {
+      setProgress(data);
+      setProcessing(true);
+    };
+
+    const onComplete = (data: ImportComplete) => {
+      setProcessing(false);
+      setProgress(null);
+      setImportComplete(data);
+      // Clear the file input so the same file can be re-selected on the next upload
+      if (inputRef.current) inputRef.current.value = '';
+      onUploadComplete?.();
+      // Auto-clear the completion banner after 6 seconds
+      if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
+      clearTimerRef.current = setTimeout(() => {
+        setResult(null);
+        setImportComplete(null);
+      }, 6000);
+    };
+
+    const attach = () => {
+      const socket = getSocket();
+      if (!socket) {
+        retryTimer = setTimeout(attach, 300);
+        return;
+      }
+      socket.on(progressEvent, onProgress);
+      socket.on(completeEvent, onComplete);
+    };
+
+    attach();
+
+    return () => {
+      if (retryTimer) clearTimeout(retryTimer);
+      const socket = getSocket();
+      if (socket) {
+        socket.off(progressEvent, onProgress);
+        socket.off(completeEvent, onComplete);
+      }
+    };
+  }, [progressEvent, completeEvent, isAuthenticated]);
 
   const handleDownloadTemplate = async () => {
     try {
@@ -58,22 +123,40 @@ function UploadCard({
     }
   };
 
+  const handleCancel = () => {
+    abortControllerRef.current?.abort();
+    abortControllerRef.current = null;
+    if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
+    setUploading(false);
+    setProcessing(false);
+    setProgress(null);
+    setResult(null);
+    setImportComplete(null);
+    if (inputRef.current) inputRef.current.value = '';
+    toast.info('Upload cancelled');
+  };
+
   const upload = async (file: File) => {
+    abortControllerRef.current = new AbortController();
+    if (clearTimerRef.current) clearTimeout(clearTimerRef.current);
     setUploading(true);
     setResult(null);
+    setProcessing(false);
+    setProgress(null);
+    setImportComplete(null);
     try {
       const formData = new FormData();
       formData.append('file', file);
       const url = acceptModes ? `${uploadEndpoint}?mode=${mode}` : uploadEndpoint;
-      const res = await api.post(url, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      const res = await api.post(url, formData, { signal: abortControllerRef.current.signal });
       const data: UploadResult = res.data?.data ?? res.data;
       setResult(data);
-      onUploadComplete?.();
       if (data.message) {
-        toast.success('Upload queued', { description: data.message });
+        // Async (202) — processing happens in background; socket events will update the card
+        setProcessing(true);
+        toast.success('File received', { description: 'Processing in background — progress will appear below.' });
       } else {
+        onUploadComplete?.();
         const { imported = 0, updated = 0, errors = [] } = data;
         if (errors.length === 0) {
           toast.success(`Upload complete — ${imported} added, ${updated} updated`);
@@ -82,10 +165,12 @@ function UploadCard({
         }
       }
     } catch (err: any) {
+      if (err?.code === 'ERR_CANCELED' || err?.name === 'CanceledError') return; // user cancelled — no toast
       const msg = err?.response?.data?.error?.message ?? 'Upload failed';
       toast.error(msg);
     } finally {
       setUploading(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -101,17 +186,28 @@ function UploadCard({
   return (
     <div className="rounded-xl border border-border bg-card p-6 space-y-5">
       {/* Header */}
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-          <Icon className="w-5 h-5 text-primary" />
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start gap-3">
+          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+            <Icon className="w-5 h-5 text-primary" />
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+            <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-          <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
-        </div>
+        {(uploading || processing) && (
+          <button
+            onClick={handleCancel}
+            title="Cancel upload"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 text-xs font-medium hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors flex-shrink-0"
+          >
+            <X className="w-3.5 h-3.5" />
+            {uploading ? 'Cancel Upload' : 'Stop'}
+          </button>
+        )}
       </div>
 
-      {/* Mode toggle — employee only */}
       {acceptModes && (
         <div className="flex items-center gap-1 bg-muted/40 rounded-lg p-1 w-fit">
           {(['upsert', 'replace'] as const).map(m => (
@@ -130,7 +226,7 @@ function UploadCard({
       )}
       {acceptModes && mode === 'replace' && (
         <p className="text-[11px] text-amber-600 dark:text-amber-400 -mt-2">
-          Replace mode will delete ALL existing employee records before importing.
+          Replace mode will delete ALL existing records of this type before importing.
         </p>
       )}
 
@@ -199,11 +295,81 @@ function UploadCard({
         </div>
       )}
 
-      {/* Async result (employee import) */}
+      {/* Async result — shows while processing or after completion */}
       {result?.message && (
-        <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
-          {result.message}
-        </p>
+        <div className="space-y-3">
+          <p className="text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2">
+            {result.message}
+          </p>
+
+          {/* Waiting for first socket event */}
+          {processing && !progress && (
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />
+              <span>Processing records in the background…</span>
+            </div>
+          )}
+
+          {/* Live progress bar */}
+          {processing && progress && progress.total > 0 && (
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between text-xs">
+                <span className="flex items-center gap-1.5 text-muted-foreground">
+                  <Loader2 className="w-3 h-3 animate-spin text-primary" />
+                  Processing…
+                </span>
+                <span className="font-medium text-foreground tabular-nums">
+                  {progress.processed} / {progress.total}
+                </span>
+              </div>
+              <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-primary transition-all duration-300"
+                  style={{ width: `${Math.round((progress.processed / progress.total) * 100)}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-muted-foreground text-right">
+                {Math.round((progress.processed / progress.total) * 100)}% complete
+              </p>
+            </div>
+          )}
+
+          {/* Completion summary */}
+          {!processing && importComplete && (
+            <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
+              <div className="flex items-center gap-3 text-sm flex-wrap">
+                <span className="flex items-center gap-1.5 text-green-600 dark:text-green-400 font-medium">
+                  <CheckCircle2 className="w-4 h-4" />
+                  {importComplete.imported} added
+                </span>
+                {(importComplete.updated ?? 0) > 0 && (
+                  <span className="flex items-center gap-1.5 text-blue-600 dark:text-blue-400 font-medium">
+                    <CheckCircle2 className="w-4 h-4" />
+                    {importComplete.updated} updated
+                  </span>
+                )}
+                {(importComplete.failed ?? 0) > 0 && (
+                  <span className="flex items-center gap-1.5 text-red-600 dark:text-red-400 font-medium">
+                    <XCircle className="w-4 h-4" />
+                    {importComplete.failed} failed
+                  </span>
+                )}
+              </div>
+              {importComplete.errors && importComplete.errors.length > 0 && (
+                <div className="rounded bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 p-2 max-h-32 overflow-y-auto">
+                  {importComplete.errors.slice(0, 10).map((e, i) => (
+                    <p key={i} className="text-xs text-red-600 dark:text-red-400">
+                      Row {e.row}: {e.message}
+                    </p>
+                  ))}
+                  {importComplete.errors.length > 10 && (
+                    <p className="text-xs text-muted-foreground mt-1">…and {importComplete.errors.length - 10} more</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Template download */}
@@ -224,6 +390,7 @@ function UploadCard({
 export default function DataCenterPage() {
   const queryClient = useQueryClient();
   const [exporting, setExporting] = useState(false);
+  const isAuthenticated = useAuthStore(s => s.isAuthenticated);
 
   const handleExportFullReport = async () => {
     setExporting(true);
@@ -250,6 +417,7 @@ export default function DataCenterPage() {
     queryKey: ['benefits', 'catalog'],
     queryFn: () => api.get('/benefits/catalog').then(r => r.data?.data ?? []),
     staleTime: 10 * 60 * 1000,
+    enabled: isAuthenticated,
   });
   const benefitNames: string[] = Array.isArray(catalogRaw)
     ? catalogRaw.map((b: any) => b.name as string)
@@ -266,20 +434,22 @@ export default function DataCenterPage() {
 
       <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
         <p className="text-xs text-amber-700 dark:text-amber-400">
-          <strong>Note:</strong> Uploading benefits data will replace existing benefit records for the employees in the file.
-          Employee upload in "Replace All" mode will delete all existing employee records first.
+          <strong>Note:</strong> "Add / Update" mode upserts records without touching others.
+          "Replace All" mode deletes <em>all</em> existing records of that type before importing — use with caution.
         </p>
       </div>
 
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
         <UploadCard
           title="Employee Data"
-          description="Upload employee records in Zoho Compensation Details format (.csv or .xlsx). Supports up to 1,000 rows per upload."
+          description="Upload employee records in Zoho Compensation Details format (.csv or .xlsx). Supports up to 5,000 rows per upload."
           icon={Users}
           templateLabel="Download Employee Template"
           templateHref="/import/template"
           uploadEndpoint="/import/employees"
           acceptModes
+          progressEvent="import:progress"
+          completeEvent="import:complete"
         />
         <UploadCard
           title="Benefits & RSU Data"
@@ -288,6 +458,9 @@ export default function DataCenterPage() {
           templateLabel="Download Benefits Template"
           templateHref="/import/benefits/template"
           uploadEndpoint="/import/benefits"
+          acceptModes
+          progressEvent="benefits:import:progress"
+          completeEvent="benefits:import:complete"
           onUploadComplete={() => {
             queryClient.invalidateQueries({ queryKey: ['benefits'] });
           }}

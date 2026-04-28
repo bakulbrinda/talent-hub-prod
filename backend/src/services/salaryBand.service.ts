@@ -46,10 +46,29 @@ export const salaryBandService = {
     }
 
     const { bandCode: _bc, bandLabel: _bl, ...rest } = data;
-    return prisma.salaryBand.create({
+    const created = await prisma.salaryBand.create({
       data: { ...rest, bandId },
       include: { band: true, jobArea: true },
     });
+
+    // Recompute compa-ratio for every active employee in this band now that a band record exists
+    const bandCode = created.band.code;
+    const affectedEmployees = await prisma.employee.findMany({
+      where: { employmentStatus: 'ACTIVE', band: bandCode },
+      select: { id: true },
+    });
+    await Promise.allSettled(
+      affectedEmployees.map(e => employeeService.computeAndUpdateDerivedFields(e.id))
+    );
+    await Promise.allSettled([
+      cacheDelPattern('dashboard:*'),
+      cacheDelPattern('pay-equity:*'),
+      cacheDelPattern('salary-bands:*'),
+      cacheDelPattern('performance:*'),
+    ]);
+    emitSalaryBandUpdated();
+
+    return created;
   },
 
   update: async (id: string, data: any) => {

@@ -12,7 +12,7 @@ router.get('/summary', ctrl.getSummary);
 router.get('/', ctrl.getAll);
 router.patch('/mark-all-read', ctrl.markAllRead);
 router.patch('/:id/read', ctrl.markRead);
-router.delete('/:id', ctrl.deleteOne);
+router.delete('/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.deleteOne);
 
 // Admin-only: manually trigger the proactive AI scan immediately.
 // Useful for demos and testing without waiting for the 1-hour interval.

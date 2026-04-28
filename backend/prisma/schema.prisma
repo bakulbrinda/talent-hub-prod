@@ -136,19 +136,26 @@ model Grade {
 }
 
 model JobCode {
-  id               String            @id @default(uuid())
-  code             String            @unique
-  title            String
-  jobFamilyId      String
-  jobFamily        JobFamily         @relation(fields: [jobFamilyId], references: [id], onDelete: Cascade)
-  bandId           String
-  band             Band              @relation(fields: [bandId], references: [id])
-  gradeId          String?
-  grade            Grade?            @relation(fields: [gradeId], references: [id])
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  employees        Employee[]
-  marketBenchmarks MarketBenchmark[]
+  id                    String            @id @default(uuid())
+  code                  String            @unique
+  title                 String
+  jobFamilyId           String
+  jobFamily             JobFamily         @relation(fields: [jobFamilyId], references: [id], onDelete: Cascade)
+  bandId                String
+  band                  Band              @relation(fields: [bandId], references: [id])
+  gradeId               String?
+  grade                 Grade?            @relation(fields: [gradeId], references: [id])
+  jobFunction           String?           @map("job_function")
+  reportsTo             String?           @map("reports_to")
+  roleSummary           String?           @map("role_summary")
+  roleResponsibilities  String?           @map("role_responsibilities")
+  managerResponsibility String?           @map("manager_responsibility")
+  educationExperience   String?           @map("education_experience")
+  skillsRequired        String?           @map("skills_required")
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  employees             Employee[]
+  marketBenchmarks      MarketBenchmark[]
 
   @@map("job_codes")
 }

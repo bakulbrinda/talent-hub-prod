@@ -41,3 +41,7 @@ coverage/
 # Vite cache
 .vite/
 **/.vite/
+
+# Sensitive HR data spreadsheets — never commit
+*.xlsx
+*.xls

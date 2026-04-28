@@ -47,7 +47,7 @@ export const scenariosController = {
   delete: async (req: Request, res: Response, next: NextFunction) => {
     try {
       await scenariosService.delete(req.params.id);
-      res.json({ success: true });
+      res.json({ data: { success: true } });
     } catch (e) {
       next(e);
     }

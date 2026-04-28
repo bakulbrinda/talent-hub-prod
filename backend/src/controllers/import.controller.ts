@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { importService } from '../services/import.service';
 import { benefitsImportService } from '../services/benefitsImport.service';
+import logger from '../lib/logger';
 
 export const importController = {
   importEmployees: async (req: Request, res: Response, next: NextFunction) => {
@@ -19,8 +20,8 @@ export const importController = {
         return;
       }
 
-      if (rows.length > 1000) {
-        res.status(400).json({ error: { code: 'TOO_LARGE', message: 'File exceeds 1000 rows limit. Please split into smaller files.' } });
+      if (rows.length > 5000) {
+        res.status(400).json({ error: { code: 'TOO_LARGE', message: 'File exceeds 5000 rows. Please split into smaller files.' } });
         return;
       }
 
@@ -33,7 +34,7 @@ export const importController = {
 
       // Process asynchronously
       importService.processImport(rows, { mode, detectedColumns }).catch((err) => {
-        console.error('Import processing error:', err);
+        logger.error('Import processing error:', err);
       });
     } catch (e) {
       next(e);
@@ -62,12 +63,24 @@ export const importController = {
         res.status(400).json({ error: { code: 'EMPTY_FILE', message: 'The uploaded file contains no data rows.' } });
         return;
       }
-      if (rows.length > 5000) {
-        res.status(400).json({ error: { code: 'TOO_LARGE', message: 'File exceeds 5000 rows. Please split into smaller files.' } });
+      if (rows.length > 15000) {
+        res.status(400).json({ error: { code: 'TOO_LARGE', message: 'File exceeds 15000 rows. Please split into smaller files.' } });
         return;
       }
-      const result = await benefitsImportService.processImport(rows);
-      res.status(200).json({ data: result });
+      const mode = (req.query.mode as string) === 'replace' ? 'replace' : 'upsert';
+
+      // Respond immediately — processing in background to avoid Neon connection timeouts
+      // on large files (same pattern as employee import).
+      res.status(202).json({
+        data: {
+          message: `Processing ${rows.length} benefit records${mode === 'replace' ? ' (replace mode: all existing benefit records will be cleared)' : ''} in the background.`,
+          total: rows.length,
+          mode,
+        },
+      });
+      benefitsImportService.processImport(rows, { mode }).catch((err) => {
+        logger.error('Benefits import processing error:', err);
+      });
     } catch (e) {
       next(e);
     }

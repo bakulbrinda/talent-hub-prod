@@ -34,11 +34,11 @@ export interface OrgSnapshot {
     avgLakhs: number;
     count: number;
   }>;
-  // RSU vesting events in next 30 days
+  // Employees with significant unvested RSU value (sourced from EmployeeBenefit EQUITY)
   rsuCliff: Array<{
     employeeName: string;
-    units: number;
-    vestingDate: string;
+    unvestedLakhs: number;
+    vestingPct: number;
   }>;
   // Benefits utilization
   benefits: Array<{
@@ -51,11 +51,9 @@ export interface OrgSnapshot {
 }
 
 async function fetchSnapshot(): Promise<OrgSnapshot> {
-  const thirtyDaysAhead = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-  const ninetyDaysAgo   = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
-  const now             = new Date();
+  const now = new Date();
 
-  const [employees, salaryBands, genderGroups, rsuEvents, benefitCatalog, benefitEnrollments, totalEmp] =
+  const [employees, salaryBands, genderGroups, equityBenefits, benefitCatalog, benefitEnrollments, totalEmp] =
     await Promise.all([
       // Core employee data + latest perf rating
       prisma.employee.findMany({
@@ -91,20 +89,19 @@ async function fetchSnapshot(): Promise<OrgSnapshot> {
         _count: true,
       }),
 
-      // RSU vesting in next 30 days
-      prisma.rsuVestingEvent.findMany({
+      // RSU cliff: employees with large unvested RSU value (EmployeeBenefit EQUITY)
+      // Unvested value = utilizedValue / utilizationPercent * (100 - utilizationPercent)
+      // Flag employees where unvested amount >= ₹5L (significant RSU cliff exposure)
+      prisma.employeeBenefit.findMany({
         where: {
-          vestingDate: { gte: now, lte: thirtyDaysAhead },
-          isVested: false,
+          status: 'ACTIVE',
+          utilizationPercent: { gt: 0, lt: 100 },
+          utilizedValue: { gt: 0 },
+          benefit: { category: 'EQUITY' },
         },
         include: {
-          rsuGrant: {
-            include: {
-              employee: { select: { firstName: true, lastName: true } },
-            },
-          },
+          employee: { select: { firstName: true, lastName: true } },
         },
-        orderBy: { vestingDate: 'asc' },
       }),
 
       // Benefits catalog
@@ -159,12 +156,24 @@ async function fetchSnapshot(): Promise<OrgSnapshot> {
     count:      g._count,
   }));
 
-  // RSU cliff
-  const rsuCliff = rsuEvents.map(e => ({
-    employeeName: `${e.rsuGrant.employee.firstName} ${e.rsuGrant.employee.lastName}`,
-    units:        e.unitsVesting,
-    vestingDate:  e.vestingDate.toISOString().split('T')[0],
-  }));
+  // RSU cliff: compute unvested value from EmployeeBenefit EQUITY records
+  // unvestedValue = (utilizedValue / utilizationPercent) * (100 - utilizationPercent)
+  const RSU_CLIFF_THRESHOLD_LAKHS = 5; // flag employees with ≥ ₹5L unvested
+  const rsuCliff = equityBenefits
+    .map(eb => {
+      const utilized = Number(eb.utilizedValue);
+      const pct = Number(eb.utilizationPercent);
+      const total = pct > 0 ? (utilized / pct) * 100 : 0;
+      const unvested = total - utilized;
+      return {
+        employeeName: `${eb.employee.firstName} ${eb.employee.lastName}`,
+        unvestedLakhs: Math.round(unvested / 100000 * 10) / 10,
+        vestingPct: Math.round(pct),
+      };
+    })
+    .filter(r => r.unvestedLakhs >= RSU_CLIFF_THRESHOLD_LAKHS)
+    .sort((a, b) => b.unvestedLakhs - a.unvestedLakhs)
+    .slice(0, 20); // top 20 by unvested value
 
   // Benefits utilization
   const benefits = benefitCatalog.map(b => {

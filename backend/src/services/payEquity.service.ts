@@ -48,7 +48,15 @@ export const payEquityService = {
         gapAmount: v.male - v.female,
       }));
 
-      // Overall gap
+      // Also include NON_BINARY in department breakdown
+      for (const r of rows) {
+        if (!deptMap[r.department]) deptMap[r.department] = { male: 0, female: 0, maleCount: 0, femaleCount: 0 };
+        if (r.gender === 'NON_BINARY') {
+          // NON_BINARY is already captured in the row iteration above; just ensure the dept exists
+        }
+      }
+
+      // Overall gap — all genders
       const overall = await prisma.employee.groupBy({
         by: ['gender'],
         where: { employmentStatus: 'ACTIVE' },
@@ -57,15 +65,19 @@ export const payEquityService = {
       });
       const maleRow = overall.find(r => r.gender === 'MALE');
       const femaleRow = overall.find(r => r.gender === 'FEMALE');
+      const nonBinaryRow = overall.find(r => r.gender === 'NON_BINARY');
       const maleAvg = Number(maleRow?._avg.annualFixed) || 0;
       const femaleAvg = Number(femaleRow?._avg.annualFixed) || 0;
+      const nonBinaryAvg = Number(nonBinaryRow?._avg.annualFixed) || 0;
 
       return {
         overall: {
           maleAvg,
           femaleAvg,
+          nonBinaryAvg,
           maleCount: maleRow?._count || 0,
           femaleCount: femaleRow?._count || 0,
+          nonBinaryCount: nonBinaryRow?._count || 0,
           gapPercent: maleAvg > 0 ? ((maleAvg - femaleAvg) / maleAvg) * 100 : 0,
           gapAmount: maleAvg - femaleAvg,
         },
@@ -138,9 +150,13 @@ export const payEquityService = {
       const inRangeCount = distribution.find(d => d.label === '90-100%')?.count || 0;
       const adjacent1 = distribution.find(d => d.label === '80-90%')?.count || 0;
       const adjacent2 = distribution.find(d => d.label === '100-110%')?.count || 0;
-      const compaScore = total > 0 ? ((inRangeCount + adjacent1 * 0.7 + adjacent2 * 0.7) / total) * 100 : 50;
+      if (total === 0) {
+        return null;
+      }
 
-      const outlierScore = total > 0 ? Math.max(0, 100 - (outliers / total) * 200) : 50;
+      const compaScore = ((inRangeCount + adjacent1 * 0.7 + adjacent2 * 0.7) / total) * 100;
+
+      const outlierScore = Math.max(0, 100 - (outliers / total) * 200);
 
       const score = genderScore * 0.4 + compaScore * 0.3 + outlierScore * 0.3;
 

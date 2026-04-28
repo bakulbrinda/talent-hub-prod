@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { BAND_ORDER } from '@shared/constants/index';
 import { Plus, Play, CheckCircle, Trash2, BarChart3, Sparkles, Loader2, RefreshCw } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
-import { ScenarioSuggester } from '../components/ScenarioSuggester';
 import { useAccess } from '../hooks/useAccess';
 
 const scenarioApi = {
@@ -16,8 +16,7 @@ const scenarioApi = {
   analyzeRun: async (runResult: any) => { const r = await api.post('/scenarios/analyze-run', runResult); return r.data; },
 };
 
-const BAND_OPTIONS = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
-const DEPT_OPTIONS = ['Engineering', 'Sales', 'Operations', 'HR', 'Finance', 'Product'];
+const BAND_OPTIONS = BAND_ORDER;
 const ACTION_TYPES = [
   { value: 'RAISE_PERCENT', label: '% Raise' },
   { value: 'RAISE_FLAT', label: 'Flat Raise (₹)' },
@@ -31,6 +30,14 @@ function emptyRule() {
 
 export default function ScenarioModelerPage() {
   const queryClient = useQueryClient();
+
+  const { data: jobAreasRaw } = useQuery({
+    queryKey: ['job-areas'],
+    queryFn: () => api.get('/job-areas').then(r => r.data?.data ?? []),
+    staleTime: 10 * 60 * 1000,
+  });
+  const DEPT_OPTIONS: string[] = Array.isArray(jobAreasRaw) ? jobAreasRaw.map((a: any) => a.name) : [];
+
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [runResult, setRunResult] = useState<any>(null);
   const [running, setRunning] = useState(false);
@@ -128,9 +135,6 @@ export default function ScenarioModelerPage() {
         <h1 className="text-2xl font-bold text-foreground">Scenario Modeler</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Model compensation changes with what-if scenario analysis</p>
       </div>
-
-      {/* AI Scenario Suggester — creates DRAFT scenarios automatically */}
-      <ScenarioSuggester />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Left: Scenario List */}

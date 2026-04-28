@@ -46,24 +46,54 @@ function StatCard({ label, value, subtitle }: { label: string; value: string | n
 }
 
 export default function BenefitsHubPage() {
-  const { data: summaryRaw } = useQuery({
+  const { data: summaryRaw, isLoading: summaryLoading, isError: summaryError } = useQuery({
     queryKey: ['benefits', 'category-summary'],
     queryFn: async () => { const r = await api.get('/benefits/category-summary'); return r.data; },
     staleTime: STALE_TIMES.SHORT,
   });
 
-  const { data: utilizationRaw } = useQuery({
+  const { data: utilizationRaw, isLoading: utilizationLoading, isError: utilizationError } = useQuery({
     queryKey: ['benefits', 'utilization'],
     queryFn: async () => { const r = await api.get('/benefits/utilization'); return r.data; },
     staleTime: STALE_TIMES.SHORT,
   });
 
+  const isLoading = summaryLoading || utilizationLoading;
+  const isError = summaryError || utilizationError;
+
   const summary: any[] = (summaryRaw as any)?.data ?? (Array.isArray(summaryRaw) ? summaryRaw : []);
-  const utilization: any = (utilizationRaw as any)?.data ?? utilizationRaw;
+  // /benefits/utilization returns an array of per-benefit objects — aggregate here
+  const utilizationArr: any[] = Array.isArray((utilizationRaw as any)?.data)
+    ? (utilizationRaw as any).data
+    : Array.isArray(utilizationRaw) ? utilizationRaw : [];
 
   const totalBenefits = summary.reduce((acc: number, s: any) => acc + (s.count ?? 0), 0);
-  const enrolledCount = utilization?.totalEnrolled ?? utilization?.enrolled ?? '—';
-  const utilizationRate = utilization?.utilizationRate ?? utilization?.rate;
+  // enrolledCount = max per-benefit enrolled employees (proxy for unique employees enrolled in any benefit)
+  const enrolledCount = utilizationRaw != null
+    ? Math.max(0, ...utilizationArr.map((b: any) => b.enrolledCount ?? 0))
+    : '—';
+  const utilizationRate = utilizationArr.length > 0
+    ? Math.round(utilizationArr.reduce((s: number, b: any) => s + (b.avgUtilization ?? 0), 0) / utilizationArr.length)
+    : null;
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6 animate-pulse">
+        <div className="h-8 w-48 rounded bg-muted" />
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          {[0, 1, 2].map(i => <div key={i} className="h-24 rounded-xl bg-muted" />)}
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <p className="text-sm text-destructive">Failed to load benefits data. Please refresh.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -91,9 +121,9 @@ export default function BenefitsHubPage() {
           subtitle="Active catalog items"
         />
         <StatCard
-          label="Total Enrollments"
+          label="Employees Enrolled"
           value={enrolledCount}
-          subtitle="Active employee enrollments"
+          subtitle="In most popular benefit"
         />
         <StatCard
           label="Utilization Rate"

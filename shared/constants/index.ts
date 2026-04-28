@@ -5,36 +5,66 @@
 import type { BandCode, InsightType, NotificationType } from '../types/index';
 
 // ─── Band Configuration ───────────────────────────────────────
+// Full band ladder aligned to company Master Job Architecture
 export const BANDS: { code: BandCode; label: string; level: number; isEligibleForRSU: boolean }[] = [
-  { code: 'A1', label: 'Associate Level 1',      level: 1,  isEligibleForRSU: false },
-  { code: 'A2', label: 'Associate Level 2',      level: 2,  isEligibleForRSU: false },
-  { code: 'P1', label: 'Professional Level 1',   level: 3,  isEligibleForRSU: false },
-  { code: 'P2', label: 'Professional Level 2',   level: 4,  isEligibleForRSU: true  },
-  { code: 'P3', label: 'Professional Level 3',   level: 5,  isEligibleForRSU: true  },
-  { code: 'M1', label: 'Manager Level 1',        level: 6,  isEligibleForRSU: true  },
-  { code: 'M2', label: 'Manager Level 2',        level: 7,  isEligibleForRSU: true  },
-  { code: 'D0', label: 'Director Level 0',       level: 8,  isEligibleForRSU: true  },
-  { code: 'D1', label: 'Director Level 1',       level: 9,  isEligibleForRSU: true  },
-  { code: 'D2', label: 'Director Level 2',       level: 10, isEligibleForRSU: true  },
+  // Band Group 1 — Associate
+  { code: 'A1', label: 'Associate Level 1',          level: 1,  isEligibleForRSU: false },
+  { code: 'A2', label: 'Associate Level 2',          level: 2,  isEligibleForRSU: false },
+  // Band Group 2 — Professional
+  { code: 'P1', label: 'Professional Level 1',       level: 3,  isEligibleForRSU: true  },
+  { code: 'P2', label: 'Professional Level 2',       level: 4,  isEligibleForRSU: true  },
+  { code: 'P3', label: 'Professional Level 3',       level: 5,  isEligibleForRSU: true  },
+  { code: 'P4', label: 'Professional Level 4/Expert',level: 6,  isEligibleForRSU: true  },
+  // Band Group 3 — Manager
+  { code: 'M0', label: 'Associate Manager',          level: 7,  isEligibleForRSU: true  },
+  { code: 'M1', label: 'Manager I',                  level: 8,  isEligibleForRSU: true  },
+  { code: 'M2', label: 'Manager II',                 level: 9,  isEligibleForRSU: true  },
+  { code: 'M3', label: 'Senior Manager',             level: 10, isEligibleForRSU: true  },
+  // Band Group 4 — Director
+  { code: 'D0', label: 'Associate Director',         level: 11, isEligibleForRSU: true  },
+  { code: 'D1', label: 'Director',                   level: 12, isEligibleForRSU: true  },
+  { code: 'D2', label: 'Senior Director',            level: 13, isEligibleForRSU: true  },
+  // Band Group 5 — Vice President
+  { code: 'V0', label: 'Associate Vice President',   level: 14, isEligibleForRSU: true  },
+  { code: 'V1', label: 'Vice President',             level: 15, isEligibleForRSU: true  },
+  { code: 'V2', label: 'Executive Vice President',   level: 16, isEligibleForRSU: true  },
+  // Band Group 6 — Executive / C-Suite
+  { code: 'E0', label: 'Executive Level I',          level: 17, isEligibleForRSU: true  },
+  { code: 'E1', label: 'Executive Level II',         level: 18, isEligibleForRSU: true  },
+  { code: 'E2', label: 'Executive Level III',        level: 19, isEligibleForRSU: true  },
 ];
 
 export const BAND_LEVELS: Record<BandCode, number> = {
-  A1: 1, A2: 2, P1: 3, P2: 4, P3: 5, M1: 6, M2: 7, D0: 8, D1: 9, D2: 10,
+  A1: 1,  A2: 2,
+  P1: 3,  P2: 4,  P3: 5,  P4: 6,
+  M0: 7,  M1: 8,  M2: 9,  M3: 10,
+  D0: 11, D1: 12, D2: 13,
+  V0: 14, V1: 15, V2: 16,
+  E0: 17, E1: 18, E2: 19,
 };
 
-export const BAND_ORDER: BandCode[] = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
+export const BAND_ORDER: BandCode[] = [
+  'A1', 'A2',
+  'P1', 'P2', 'P3', 'P4',
+  'M0', 'M1', 'M2', 'M3',
+  'D0', 'D1', 'D2',
+  'V0', 'V1', 'V2',
+  'E0', 'E1', 'E2',
+];
 
 export const BAND_COLORS: Record<BandCode, string> = {
-  A1: '#94a3b8',
-  A2: '#64748b',
-  P1: '#6366f1',
-  P2: '#8b5cf6',
-  P3: '#a855f7',
-  M1: '#ec4899',
-  M2: '#f43f5e',
-  D0: '#f97316',
-  D1: '#ef4444',
-  D2: '#dc2626',
+  // Associate — slate
+  A1: '#94a3b8', A2: '#64748b',
+  // Professional — indigo → purple
+  P1: '#6366f1', P2: '#8b5cf6', P3: '#a855f7', P4: '#9333ea',
+  // Manager — pink → rose
+  M0: '#ec4899', M1: '#e879a0', M2: '#f43f5e', M3: '#e11d48',
+  // Director — orange → red
+  D0: '#f97316', D1: '#ef4444', D2: '#dc2626',
+  // VP — deep red
+  V0: '#b91c1c', V1: '#991b1b', V2: '#7f1d1d',
+  // Executive — near black
+  E0: '#450a0a', E1: '#3b0764', E2: '#1e0636',
 };
 
 // ─── Compa-Ratio Zones ────────────────────────────────────────
@@ -58,19 +88,32 @@ export const RSU_VESTING_MONTHS = [12, 24, 36, 48]; // cliff at 12, then yearly
 export const RSU_VESTING_PERCENT_PER_EVENT = 25; // 25% per event
 
 export const RSU_GRANT_TIERS: Record<string, { min: number; max: number }> = {
+  // Professional
+  P1: { min: 25,  max: 50  },
   P2: { min: 50,  max: 75  },
   P3: { min: 75,  max: 100 },
-  M1: { min: 100, max: 150 },
-  M2: { min: 150, max: 200 },
-  D0: { min: 200, max: 300 },
-  D1: { min: 300, max: 500 },
-  D2: { min: 500, max: 800 },
+  P4: { min: 100, max: 125 },
+  // Manager
+  M0: { min: 100, max: 125 },
+  M1: { min: 125, max: 175 },
+  M2: { min: 175, max: 225 },
+  M3: { min: 225, max: 275 },
+  // Director
+  D0: { min: 275, max: 375 },
+  D1: { min: 375, max: 550 },
+  D2: { min: 550, max: 800 },
+  // VP
+  V0: { min: 800,  max: 1200 },
+  V1: { min: 1200, max: 1800 },
+  V2: { min: 1800, max: 2500 },
+  // Executive
+  E0: { min: 2500, max: 4000 },
+  E1: { min: 4000, max: 6000 },
+  E2: { min: 6000, max: 10000 },
 };
 
 export const RSU_ELIGIBILITY = {
-  MIN_BAND_LEVEL: 2, // P1 = level 3 (index 2 in BAND_ORDER) — P1 and above are eligible
-  MIN_PERFORMANCE_RATING: 4.0,
-  MIN_TENURE_MONTHS: 12,
+  MIN_TENURE_MONTHS: 24, // Sole eligibility criterion: 2+ years of employment
 };
 
 // ─── Feature Permission Keys ──────────────────────────────────
@@ -136,6 +179,13 @@ export const SOCKET_EVENTS = {
   // Cross-module data change events — emitted after any employee or band write
   EMPLOYEE_DATA_CHANGED: 'employee:data:changed',
   SALARY_BAND_UPDATED: 'salary:band:updated',
+  EMPLOYEE_CREATED: 'employee:created',
+  EMPLOYEE_UPDATED: 'employee:updated',
+  IMPORT_PROGRESS: 'import:progress',
+  IMPORT_COMPLETE: 'import:complete',
+  BENEFITS_IMPORT_PROGRESS: 'benefits:import:progress',
+  BENEFITS_IMPORT_COMPLETE: 'benefits:import:complete',
+  JOB_ARCHITECTURE_UPDATED: 'job-architecture:updated',
 } as const;
 
 // ─── AI Insight Configuration ─────────────────────────────────

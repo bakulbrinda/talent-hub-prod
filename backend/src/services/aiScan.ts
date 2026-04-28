@@ -58,7 +58,7 @@ Severity guide:
 Focus areas (in priority order):
 1. Gender pay gaps by department — flag departments where women earn <90% of men
 2. Employees significantly outside salary bands (compa-ratio < 70% or > 130%)
-3. RSU vesting cliffs in next 30 days — flag any > 500 units
+3. RSU vesting exposure — flag employees with unvested RSU value > ₹10L (high retention risk if they leave)
 4. Low compa-ratio employees with high performance ratings (underpaid high performers)
 5. Benefits utilization anomalies (< 20% adoption for health/insurance benefits)
 6. New hire pay parity issues (employees with <90 days tenure paid >20% above/below band midpoint)`;
@@ -81,6 +81,12 @@ export async function runProactiveScan(): Promise<void> {
     // ─ Gather live org data ──────────────────────────────────────────────────
     const snapshot = await gatherOrgSnapshot();
     logger.info(`[AI Scan] Snapshot gathered — ${snapshot.totalEmployees} employees`);
+
+    // Skip scan entirely if no employee data — nothing meaningful to analyse
+    if (snapshot.totalEmployees === 0) {
+      logger.info('[AI Scan] Skipped — no employee data in system');
+      return;
+    }
 
     // ─ Build compact data payload for Claude ────────────────────────────────
     const dataPayload = {

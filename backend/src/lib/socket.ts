@@ -162,3 +162,27 @@ export const emitEmployeeImportComplete = (payload: { imported: number; failed: 
     logger.error('Failed to emit import:complete:', err);
   }
 };
+
+export const emitBenefitsImportProgress = (payload: { processed: number; total: number }): void => {
+  try {
+    getIO().emit(SOCKET_EVENTS.BENEFITS_IMPORT_PROGRESS, payload);
+  } catch (err) {
+    logger.error('Failed to emit benefits:import:progress:', err);
+  }
+};
+
+export const emitJobArchitectureRefresh = (): void => {
+  try {
+    getIO().emit(SOCKET_EVENTS.JOB_ARCHITECTURE_UPDATED, {});
+  } catch (err) {
+    logger.error('Failed to emit job-architecture:updated:', err);
+  }
+};
+
+export const emitBenefitsImportComplete = (payload: { imported: number; updated: number; errors: unknown[] }): void => {
+  try {
+    getIO().emit(SOCKET_EVENTS.BENEFITS_IMPORT_COMPLETE, payload);
+  } catch (err) {
+    logger.error('Failed to emit benefits:import:complete:', err);
+  }
+};

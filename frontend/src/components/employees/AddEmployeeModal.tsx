@@ -2,12 +2,14 @@ import { useState, useEffect, forwardRef } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { X, User, Briefcase, DollarSign, Loader2 } from 'lucide-react';
 import { employeeService } from '../../services/employee.service';
 import { queryKeys } from '../../lib/queryClient';
 import { cn } from '../../lib/utils';
+import { api } from '../../lib/api';
+import { BAND_ORDER } from '@shared/constants/index';
 
 const schema = z.object({
   firstName: z.string().min(1, 'First name is required'),
@@ -17,7 +19,7 @@ const schema = z.object({
   dateOfJoining: z.string().min(1, 'Date of joining is required'),
   department: z.string().min(1, 'Department is required'),
   designation: z.string().min(1, 'Designation is required'),
-  band: z.enum(['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2']),
+  band: z.string().min(1, 'Band is required'),
   grade: z.string().min(1, 'Grade is required'),
   employmentType: z.enum(['FULL_TIME', 'PART_TIME', 'CONTRACT']).default('FULL_TIME'),
   workMode: z.enum(['REMOTE', 'HYBRID', 'ONSITE']).default('HYBRID'),
@@ -36,9 +38,6 @@ interface Props {
   prefill?: Partial<FormData> & { id?: string };
 }
 
-const DEPARTMENTS = ['Engineering', 'Sales', 'Product', 'HR', 'Finance', 'Operations'];
-const BANDS = ['A1', 'A2', 'P1', 'P2', 'P3', 'M1', 'M2', 'D0', 'D1', 'D2'];
-const GRADES = ['A1-L1', 'A1-L2', 'A2-L1', 'A2-L2', 'P1-L1', 'P1-L2', 'P2-L1', 'P2-L2', 'P3-L1', 'P3-L2', 'M1-L1', 'M1-L2', 'M2-L1', 'M2-L2', 'D0-L1', 'D1-L1', 'D2-L1'];
 
 function Field({ label, error, children }: { label: React.ReactNode; error?: string; children: React.ReactNode }) {
   return (
@@ -77,6 +76,20 @@ export default function AddEmployeeModal({ open, onClose, prefill }: Props) {
   const [submitting, setSubmitting] = useState(false);
   const queryClient = useQueryClient();
   const isEditing = !!prefill?.id;
+
+  const { data: jobAreasRaw } = useQuery({
+    queryKey: ['job-areas'],
+    queryFn: () => api.get('/job-areas').then(r => r.data?.data ?? []),
+    staleTime: 10 * 60 * 1000,
+  });
+  const DEPARTMENTS: string[] = Array.isArray(jobAreasRaw) ? jobAreasRaw.map((a: any) => a.name) : [];
+
+  const { data: gradesRaw } = useQuery({
+    queryKey: ['grades'],
+    queryFn: () => api.get('/grades').then(r => r.data?.data ?? []),
+    staleTime: 10 * 60 * 1000,
+  });
+  const GRADES: string[] = Array.isArray(gradesRaw) ? gradesRaw.map((g: any) => g.gradeCode) : [];
 
   const { register, handleSubmit, formState: { errors }, reset, watch, setValue } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -124,7 +137,7 @@ export default function AddEmployeeModal({ open, onClose, prefill }: Props) {
         monthlyGrossSalary: data.annualFixed / 12,
         incentives: 0, joiningBonus: 0, retentionBonus: 0,
         dateOfJoining: new Date(data.dateOfJoining).toISOString(),
-        employeeId: `EMP${Date.now()}${Math.random().toString(36).slice(2, 5).toUpperCase()}`,
+        employeeId: undefined,
         employmentStatus: 'ACTIVE',
       };
 
@@ -233,7 +246,7 @@ export default function AddEmployeeModal({ open, onClose, prefill }: Props) {
                 <Field label="Band *" error={errors.band?.message}>
                   <Select {...register('band')}>
                     <option value="">Select band</option>
-                    {BANDS.map(b => <option key={b} value={b}>{b}</option>)}
+                    {BAND_ORDER.map(b => <option key={b} value={b}>{b}</option>)}
                   </Select>
                 </Field>
                 <Field label="Grade *" error={errors.grade?.message}>

@@ -1,8 +1,8 @@
 import { prisma } from '../lib/prisma';
 import { cacheGet, cacheSet, cacheDel } from '../lib/redis';
-import { callClaude } from '../lib/claudeClient';
 import { parse } from 'csv-parse/sync';
 import * as XLSX from 'xlsx';
+import logger from '../lib/logger';
 import { BAND_ORDER } from '../types/index';
 
 export const benefitsService = {
@@ -116,61 +116,8 @@ export const benefitsService = {
     const result = await prisma.employeeBenefit.create({
       data: { employeeId, benefitId, enrolledAt: new Date(), status: 'ACTIVE', utilizationPercent: 0, utilizedValue: 0 },
     });
-    await Promise.allSettled([cacheDel('benefits:utilization'), cacheDel('benefits:ai-analysis')]);
+    await Promise.allSettled([cacheDel('benefits:utilization')]);
     return result;
-  },
-
-  analyzeWithAI: async (): Promise<string> => {
-    const cached = await cacheGet<string>('benefits:ai-analysis');
-    if (cached) return cached;
-
-    const [utilization, totalEmployees] = await Promise.all([
-      prisma.benefitsCatalog.findMany({
-        where: { isActive: true },
-        include: { employeeBenefits: { where: { status: 'ACTIVE' }, select: { utilizationPercent: true, utilizedValue: true } } },
-      }),
-      prisma.employee.count({ where: { employmentStatus: 'ACTIVE' } }),
-    ]);
-
-    const benefitStats = utilization.map(b => ({
-      name: b.name,
-      category: b.category,
-      annualValue: Number(b.annualValue),
-      enrolledCount: b.employeeBenefits.length,
-      enrollmentRate: totalEmployees > 0 ? ((b.employeeBenefits.length / totalEmployees) * 100).toFixed(1) : '0',
-      avgUtilization: b.employeeBenefits.length > 0
-        ? (b.employeeBenefits.reduce((s, e) => s + Number(e.utilizationPercent || 0), 0) / b.employeeBenefits.length).toFixed(1)
-        : '0',
-      totalSpend: b.employeeBenefits.reduce((s, e) => s + Number(e.utilizedValue || 0), 0),
-    }));
-
-    const totalSpend = benefitStats.reduce((s, b) => s + b.totalSpend, 0);
-    const avgEnrollmentRate = (benefitStats.reduce((s, b) => s + parseFloat(b.enrollmentRate), 0) / benefitStats.length).toFixed(1);
-
-    const prompt = `You are CompSense AI, an expert in HR benefits strategy. Analyze the following employee benefits data and provide a concise, data-driven executive analysis with actionable recommendations.
-
-Company size: ${totalEmployees} active employees
-Total benefits spend: ₹${(totalSpend / 100000).toFixed(1)}L
-Average enrollment rate: ${avgEnrollmentRate}%
-
-Benefits breakdown:
-${benefitStats.map(b => `- ${b.name} (${b.category}): ${b.enrolledCount} enrolled (${b.enrollmentRate}% of workforce), avg utilization ${b.avgUtilization}%, annual value ₹${(b.annualValue / 1000).toFixed(0)}K`).join('\n')}
-
-Provide:
-1. A 2-paragraph executive summary of benefits health and ROI
-2. Top 3 under-utilized benefits with reasons why
-3. Top 3 recommendations to improve benefits effectiveness and employee satisfaction
-4. Budget optimization opportunity
-
-Format with clear markdown headers. Be specific with numbers.`;
-
-    try {
-      const result = await callClaude(prompt, { temperature: 0.4, maxTokens: 1200 });
-      await cacheSet('benefits:ai-analysis', result.content, 1800);
-      return result.content;
-    } catch {
-      return `**Benefits Overview**\n\n${totalEmployees} employees enrolled across ${benefitStats.length} benefit programs. Total benefits spend: ₹${(totalSpend / 100000).toFixed(1)}L. Average enrollment rate: ${avgEnrollmentRate}%.`;
-    }
   },
 
   importUtilizationData: async (buffer: Buffer, mimetype: string): Promise<{ updated: number; failed: number; errors: string[] }> => {
@@ -203,7 +150,7 @@ Format with clear markdown headers. Be specific with numbers.`;
     // Log column names from first row for diagnostics
     if (rawRows.length > 0) {
       const cols = Object.keys(rawRows[0]);
-      console.log('[benefits:import] CSV columns found:', cols);
+      logger.debug('[benefits:import] CSV columns found: %o', cols);
     }
 
     for (const row of rawRows) {
@@ -233,7 +180,6 @@ Format with clear markdown headers. Be specific with numbers.`;
     }
 
     await cacheDel('benefits:utilization');
-    await cacheDel('benefits:ai-analysis');
     return { updated, failed, errors };
   },
 

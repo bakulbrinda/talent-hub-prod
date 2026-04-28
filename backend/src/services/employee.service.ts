@@ -1,7 +1,9 @@
 import { prisma } from '../lib/prisma';
 import { Prisma } from '@prisma/client';
+import { randomBytes } from 'crypto';
 import { cacheDelPattern } from '../lib/redis';
 import { emitDashboardRefresh, emitEmployeeCreated, emitEmployeeUpdated, emitEmployeeDataChanged } from '../lib/socket';
+import { BAND_ORDER } from '../types/index';
 
 export interface EmployeeFilters {
   page?: number;
@@ -87,6 +89,19 @@ export const employeeService = {
   },
 
   create: async (data: any) => {
+    if (!data.employeeId) {
+      data = { ...data, employeeId: `EMP${Date.now()}${randomBytes(2).toString('hex').toUpperCase()}` };
+    }
+    if (!data.grade) {
+      data = { ...data, grade: data.band || 'N/A' };
+    }
+    // Coerce date strings to Date objects for Prisma
+    if (data.dateOfJoining && typeof data.dateOfJoining === 'string') {
+      data = { ...data, dateOfJoining: new Date(data.dateOfJoining) };
+    }
+    if (data.dateOfExit && typeof data.dateOfExit === 'string') {
+      data = { ...data, dateOfExit: new Date(data.dateOfExit) };
+    }
     const employee = await prisma.employee.create({ data });
     await employeeService.computeAndUpdateDerivedFields(employee.id);
     const updated = await prisma.employee.findUniqueOrThrow({ where: { id: employee.id } });
@@ -179,12 +194,36 @@ export const employeeService = {
       (now.getTime() - joiningDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
     );
 
+    // Attrition risk score (0–100) derived from real compensation signals:
+    //   compaRatio below midpoint → underpaid → flight risk
+    //   long tenure without band progression → stagnation risk
+    //   junior/mid bands → higher market mobility
+    const bandIdx = BAND_ORDER.indexOf(employee.band as typeof BAND_ORDER[number]);
+    let attritionScore = 0;
+
+    if (compaRatio !== null) {
+      if (compaRatio < 80) attritionScore += 40;
+      else if (compaRatio < 90) attritionScore += 25;
+      else if (compaRatio < 95) attritionScore += 12;
+    }
+
+    if (timeInCurrentGrade > 48) attritionScore += 30;
+    else if (timeInCurrentGrade > 36) attritionScore += 20;
+    else if (timeInCurrentGrade > 24) attritionScore += 12;
+    else if (timeInCurrentGrade > 18) attritionScore += 6;
+
+    if (bandIdx >= 0 && bandIdx <= 1) attritionScore += 15;       // A1, A2 — most mobile
+    else if (bandIdx >= 2 && bandIdx <= 4) attritionScore += 8;   // P1–P3
+
+    const attritionRiskScore = Math.min(100, attritionScore);
+
     await prisma.employee.update({
       where: { id: employeeId },
       data: {
         ...(compaRatio !== null && { compaRatio }),
         ...(payRangePenetration !== null && { payRangePenetration }),
         timeInCurrentGrade,
+        attritionRiskScore,
       },
     });
   },

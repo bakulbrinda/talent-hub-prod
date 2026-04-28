@@ -107,7 +107,8 @@ export const scenariosService = {
   run: async (id: string) => {
     const scenario = await prisma.scenario.findUnique({ where: { id } });
     if (!scenario) throw new Error('Scenario not found');
-    const rules = (scenario.rules as unknown) as ScenarioRule[];
+    const rawRules = scenario.rules;
+    const rules: ScenarioRule[] = Array.isArray(rawRules) ? rawRules as unknown as ScenarioRule[] : (rawRules ? [rawRules as unknown as ScenarioRule] : []);
 
     const employees = await prisma.employee.findMany({
       where: { employmentStatus: 'ACTIVE' },
@@ -170,7 +171,8 @@ export const scenariosService = {
   apply: async (id: string) => {
     const scenario = await prisma.scenario.findUnique({ where: { id } });
     if (!scenario) throw new Error('Scenario not found');
-    const rules = (scenario.rules as unknown) as ScenarioRule[];
+    const rawRules2 = scenario.rules;
+    const rules: ScenarioRule[] = Array.isArray(rawRules2) ? rawRules2 as unknown as ScenarioRule[] : (rawRules2 ? [rawRules2 as unknown as ScenarioRule] : []);
 
     const [employees, salaryBands] = await Promise.all([
       prisma.employee.findMany({

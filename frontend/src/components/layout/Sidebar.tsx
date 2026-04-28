@@ -3,7 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Users, BarChart3, Scale, Sparkles, Gift,
   TrendingUp, Award, Zap, FlaskConical, Bell, Settings,
-  ChevronDown, DollarSign, Layers, Building2, Mail, Database,
+  ChevronDown, DollarSign, Layers, Building2, Mail, Database, ScrollText, FileText,
 } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useNotificationStore } from '../../store/notificationStore';
@@ -45,9 +45,10 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Core',
     icon: LayoutDashboard,
     items: [
-      { path: '/dashboard',     label: 'Dashboard',    icon: LayoutDashboard, feature: 'dashboard'     },
-      { path: '/ai-assistant',  label: 'AI Assistant', icon: Sparkles,        feature: 'ai_insights'   },
-      { path: '/notifications', label: 'Notifications',icon: Bell,            feature: 'notifications' },
+      { path: '/dashboard',          label: 'Dashboard',          icon: LayoutDashboard, feature: 'dashboard'     },
+      { path: '/ai-assistant',       label: 'AI Assistant',       icon: Sparkles,        feature: 'ai_insights'   },
+      { path: '/leadership-report',  label: 'Leadership Report',  icon: FileText,        feature: 'ai_insights'   },
+      { path: '/notifications',      label: 'Notifications',      icon: Bell,            feature: 'notifications' },
     ],
   },
   {
@@ -93,8 +94,9 @@ const NAV_GROUPS: NavGroup[] = [
     label: 'Settings',
     icon: Settings,
     items: [
-      { path: '/sent-mails',       label: 'Sent Mails',        icon: Mail,     feature: 'email'             },
-      { path: '/settings/platform',label: 'Platform Settings', icon: Settings, feature: 'settings.platform' },
+      { path: '/sent-mails',       label: 'Sent Mails',        icon: Mail,       feature: 'email'             },
+      { path: '/app-logs',         label: 'Application Logs',  icon: ScrollText, feature: 'audit_log'         },
+      { path: '/settings/platform',label: 'Platform Settings', icon: Settings,   feature: 'settings.platform' },
       { path: '/settings/user',    label: 'User Settings',     icon: Users                                  },
     ],
   },
@@ -212,6 +214,29 @@ export function Sidebar() {
             const GroupIcon = group.icon;
             const isGroupActive = group.id === activeGroupId;
             const isExpanded = expandedGroups.has(group.id);
+
+            // Data Center: single direct link, no collapsible dropdown
+            if (group.id === 'data') {
+              const item = group.items[0];
+              const Icon = item.icon;
+              const isActive = location.pathname.startsWith(item.path);
+              return (
+                <div key={group.id}>
+                  <NavLink
+                    to={item.path}
+                    className={cn(
+                      'w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all',
+                      isActive
+                        ? 'text-[hsl(var(--sidebar-accent))]'
+                        : 'text-[hsl(var(--sidebar-foreground)/0.45)] hover:text-[hsl(var(--sidebar-foreground)/0.75)]'
+                    )}
+                  >
+                    <Icon className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span className="flex-1 text-left whitespace-nowrap">{group.label}</span>
+                  </NavLink>
+                </div>
+              );
+            }
 
             return (
               <div key={group.id}>

@@ -26,6 +26,9 @@ const AIAssistantPage = lazy(() => import('./pages/AIAssistantPage'));
 const SentMailsPage = lazy(() => import('./pages/SentMailsPage'));
 const DataCenterPage = lazy(() => import('./pages/DataCenterPage'));
 const AcceptInvitePage = lazy(() => import('./pages/AcceptInvitePage'));
+const ApplicationLogsPage = lazy(() => import('./pages/ApplicationLogsPage'));
+const CompensationHubPage = lazy(() => import('./pages/CompensationHubPage'));
+const LeadershipReportPage = lazy(() => import('./pages/LeadershipReportPage'));
 
 const PageLoader = () => (
   <div className="flex items-center justify-center h-screen bg-background">
@@ -73,6 +76,9 @@ function AppRoutes() {
           <Route path="ai-assistant" element={<AIAssistantPage />} />
           <Route path="sent-mails" element={<SentMailsPage />} />
           <Route path="data-center" element={<DataCenterPage />} />
+          <Route path="app-logs" element={<ApplicationLogsPage />} />
+          <Route path="compensation" element={<CompensationHubPage />} />
+          <Route path="leadership-report" element={<LeadershipReportPage />} />
         </Route>
 
         {/* Catch-all — send to login, ProtectedRoute handles auth check */}

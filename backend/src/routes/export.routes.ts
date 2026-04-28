@@ -1,13 +1,15 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate } from '../middleware/authenticate';
+import { requireRole } from '../middleware/requireRole';
 import { prisma } from '../lib/prisma';
 import { generateFullReport } from '../services/fullReportExport.service';
 
 const router = Router();
 router.use(authenticate);
+router.use(requireRole('ADMIN', 'HR_MANAGER'));
 
 // ─── CSV Export: Employees ────────────────────────────────────
-router.get('/employees/csv', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/employees/csv', async (_req: Request, res: Response, next: NextFunction) => {
   try {
     const employees = await prisma.employee.findMany({
       where: { employmentStatus: 'ACTIVE' },
