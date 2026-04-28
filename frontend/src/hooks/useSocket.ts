@@ -87,17 +87,14 @@ export function useSocket() {
       queryClient.invalidateQueries({ queryKey: ['performance'] });
     });
 
-    // Real-time import progress — emitted per batch during CSV import.
-    socket.on('import:progress', (payload: { processed: number; total: number; errors: unknown[] }) => {
-      const pct = payload.total > 0 ? Math.round((payload.processed / payload.total) * 100) : 0;
-      toast.loading(`Importing employees… ${payload.processed}/${payload.total} (${pct}%)`, {
-        id: 'import-progress',
-        duration: Infinity,
-      });
+    // Real-time import progress — query invalidation is deferred to import:complete.
+    // UploadCard (DataCenterPage) handles the per-batch progress display itself.
+    socket.on('import:progress', (_payload: { processed: number; total: number; errors: unknown[] }) => {
+      // intentionally empty — UploadCard owns the progress UI
     });
 
     // Bulk import complete — full refresh of every data-dependent module.
-    socket.on('import:complete', (payload: { imported: number; failed: number }) => {
+    socket.on('import:complete', (_payload: { imported: number; failed: number }) => {
       queryClient.invalidateQueries({ queryKey: ['employees'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       queryClient.invalidateQueries({ queryKey: ['pay-equity'] });
@@ -105,10 +102,7 @@ export function useSocket() {
       queryClient.invalidateQueries({ queryKey: ['performance'] });
       queryClient.invalidateQueries({ queryKey: ['scenarios'] });
       queryClient.invalidateQueries({ queryKey: ['ai-insights'] });
-      toast.dismiss('import-progress');
-      if (payload.imported > 0) {
-        toast.success(`Bulk import finished: ${payload.imported} employees added`, { duration: 5000 });
-      }
+      // UploadCard shows its own completion summary — no duplicate toast here
     });
 
     // Emitted by employee.service after any create/update — catches cases where

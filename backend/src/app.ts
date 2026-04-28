@@ -27,6 +27,7 @@ import aiChatRoutes from './routes/aiChat.routes';
 import aiReportRoutes from './routes/aiReport.routes';
 import usersRoutes from './routes/users.routes';
 import settingsRoutes from './routes/settings.routes';
+import appLogsRoutes from './routes/appLogs.routes';
 
 const app = express();
 
@@ -138,6 +139,7 @@ app.use('/api/email', emailRoutes);
 app.use('/api/ai/chat', aiChatRoutes);
 app.use('/api/ai/report', aiReportRoutes);
 app.use('/api/settings', settingsRoutes);
+app.use('/api/app-logs', appLogsRoutes);
 
 // ─── 404 for unknown API routes ───────────────────────────────
 app.use('/api/*', (_req, res) => {

@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Star, TrendingUp, X, Mail, ChevronUp, ChevronDown, Search, Filter, ArrowUpDown } from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Star, TrendingUp, X, Mail, ChevronUp, ChevronDown, Search, Filter, ArrowUpDown, Sparkles, RefreshCw } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
@@ -10,6 +11,7 @@ const performanceApi = {
   getMatrix: async () => { const r = await api.get('/performance/matrix'); return r.data; },
   getPromotionReadiness: async () => { const r = await api.get('/performance/promotion-readiness'); return r.data; },
   getPayAlignmentGaps: async () => { const r = await api.get('/performance/pay-alignment-gaps'); return r.data; },
+  getAIAnalysis: async () => { const r = await api.get('/performance/ai-analysis'); return r.data; },
 };
 
 const BAND_COLORS: Record<string, string> = {
@@ -48,6 +50,8 @@ function RatingStars({ rating }: { rating: number }) {
 
 export default function PerformancePage() {
   const [activeTab, setActiveTab] = useState<'matrix' | 'promotion' | 'gaps'>('matrix');
+  const [showAI, setShowAI] = useState(false);
+  const queryClient = useQueryClient();
   const [emailTarget, setEmailTarget] = useState<EmailComposerEmployee | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [searchName, setSearchName] = useState('');
@@ -74,6 +78,13 @@ export default function PerformancePage() {
     queryKey: ['performance', 'pay-alignment-gaps'],
     queryFn: performanceApi.getPayAlignmentGaps,
   });
+  const { data: aiRaw, isLoading: aiLoading, refetch: refetchAI } = useQuery({
+    queryKey: ['performance', 'ai-analysis'],
+    queryFn: performanceApi.getAIAnalysis,
+    enabled: showAI,
+    staleTime: 1800000,
+  });
+  const aiNarrative = (aiRaw?.data?.narrative || '') as string;
 
   const matrix = (matrixRaw?.data || []) as any[];
   const promotionList = (promotionRaw?.data || []) as any[];
@@ -150,12 +161,79 @@ export default function PerformancePage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Performance Intelligence</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Analyze pay-performance alignment, promotion readiness, and compensation gaps
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Performance Intelligence</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Analyze pay-performance alignment, promotion readiness, and compensation gaps
+          </p>
+        </div>
+        <button
+          onClick={() => { setShowAI(!showAI); if (!showAI) refetchAI(); }}
+          className={cn('flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border',
+            showAI ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'
+          )}
+        >
+          <Sparkles className="w-4 h-4" />
+          AI Analysis
+        </button>
       </div>
+
+      {showAI && (
+        <div className="rounded-xl border border-primary/30 bg-card overflow-hidden">
+          <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-primary/5">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-primary" />
+              <span className="text-sm font-semibold text-foreground">Performance AI Analysis</span>
+              <span className="text-xs text-muted-foreground">Powered by Claude</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { queryClient.removeQueries({ queryKey: ['performance', 'ai-analysis'] }); refetchAI(); }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Regenerate
+              </button>
+              <button onClick={() => setShowAI(false)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+          <div className="p-5 max-h-96 overflow-y-auto">
+            {aiLoading ? (
+              <div className="flex flex-col items-center justify-center py-10 gap-3">
+                <div className="relative">
+                  <div className="w-10 h-10 rounded-full border-2 border-primary/30 animate-spin border-t-primary" />
+                  <Sparkles className="w-4 h-4 text-primary absolute inset-0 m-auto" />
+                </div>
+                <p className="text-sm text-muted-foreground">Claude is analyzing performance data...</p>
+              </div>
+            ) : aiNarrative ? (
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <ReactMarkdown
+                  components={{
+                    h1: ({ children }) => <h1 className="text-base font-bold text-foreground mt-3 mb-2">{children}</h1>,
+                    h2: ({ children }) => <h2 className="text-sm font-semibold text-foreground mt-3 mb-1.5">{children}</h2>,
+                    h3: ({ children }) => <h3 className="text-sm font-semibold text-foreground mt-2 mb-1">{children}</h3>,
+                    p: ({ children }) => <p className="text-sm text-foreground leading-relaxed mb-2">{children}</p>,
+                    ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-2">{children}</ul>,
+                    li: ({ children }) => <li className="text-sm text-foreground">{children}</li>,
+                    strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                  }}
+                >
+                  {aiNarrative}
+                </ReactMarkdown>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <Sparkles className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Click Regenerate to generate a fresh AI analysis</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* KPI Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

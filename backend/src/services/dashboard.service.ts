@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { cacheGet, cacheSet } from '../lib/redis';
 import { BAND_ORDER } from '../types/index';
+import { getAiInferredPerformance } from './aiPerformanceInference';
 
 const CACHE_TTL = 30; // seconds
 
@@ -49,7 +50,11 @@ export const dashboardService = {
       _count: true,
     });
     return result
-      .sort((a, b) => BAND_ORDER.indexOf(a.band as typeof BAND_ORDER[number]) - BAND_ORDER.indexOf(b.band as typeof BAND_ORDER[number]))
+      .sort((a, b) => {
+        const ai = BAND_ORDER.indexOf(a.band as typeof BAND_ORDER[number]);
+        const bi = BAND_ORDER.indexOf(b.band as typeof BAND_ORDER[number]);
+        return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+      })
       .map(r => ({ band: r.band, count: r._count }));
   }),
 
@@ -120,27 +125,38 @@ export const dashboardService = {
     const employees = await prisma.employee.findMany({
       where: { employmentStatus: 'ACTIVE', compaRatio: { not: null } },
       select: {
-        firstName: true, lastName: true, compaRatio: true, band: true,
+        id: true, firstName: true, lastName: true, compaRatio: true, band: true,
         department: true, dateOfJoining: true,
         performanceRatings: { orderBy: { cycle: 'desc' }, take: 1 },
       },
     });
     const now = new Date();
+
+    const withRealRatings = employees.filter(e => e.performanceRatings.length > 0);
+
+    // Use real ratings when available, otherwise fall back to AI-inferred tiers
+    if (withRealRatings.length > 0) {
+      return withRealRatings.map(e => ({
+        name: `${e.firstName} ${e.lastName}`,
+        compaRatio: Number(e.compaRatio),
+        performanceRating: Number(e.performanceRatings[0].rating),
+        tenureMonths: Math.floor((now.getTime() - new Date(e.dateOfJoining).getTime()) / (1000 * 60 * 60 * 24 * 30)),
+        band: e.band,
+        department: e.department,
+      }));
+    }
+
+    const inferred = await getAiInferredPerformance();
     return employees
-      .filter(e => e.performanceRatings.length > 0)
-      .map(e => {
-        const tenureMonths = Math.floor(
-          (now.getTime() - new Date(e.dateOfJoining).getTime()) / (1000 * 60 * 60 * 24 * 30)
-        );
-        return {
-          name: `${e.firstName} ${e.lastName}`,
-          compaRatio: Number(e.compaRatio),
-          performanceRating: Number(e.performanceRatings[0].rating),
-          tenureMonths,
-          band: e.band,
-          department: e.department,
-        };
-      });
+      .filter(e => inferred.has(e.id))
+      .map(e => ({
+        name: `${e.firstName} ${e.lastName}`,
+        compaRatio: Number(e.compaRatio),
+        performanceRating: inferred.get(e.id)!.rating,
+        tenureMonths: Math.floor((now.getTime() - new Date(e.dateOfJoining).getTime()) / (1000 * 60 * 60 * 24 * 30)),
+        band: e.band,
+        department: e.department,
+      }));
   }),
 
   getDeptPayEquityHeatmap: () => cached('dashboard:equity-heatmap', async () => {
@@ -170,21 +186,39 @@ export const dashboardService = {
 
   getRsuVestingTimeline: () => cached('dashboard:rsu-timeline', async () => {
     const now = new Date();
-    const cutoff = new Date(now.getFullYear(), now.getMonth() + 12, 1);
-    const events = await prisma.rsuVestingEvent.findMany({
-      where: { vestingDate: { gte: now, lt: cutoff }, isVested: false },
-      include: { rsuGrant: { select: { currentPrice: true, priceAtGrant: true } } },
+    // RSU data lives in EmployeeBenefit (EQUITY category), not the empty RsuVestingEvent table.
+    // Estimate upcoming annual vest anniversaries within the next 12 months.
+    const benefits = await prisma.employeeBenefit.findMany({
+      where: {
+        status: 'ACTIVE',
+        benefit: { category: 'EQUITY' },
+        utilizationPercent: { lt: 100 },
+      },
+      include: { benefit: { select: { annualValue: true } } },
     });
-    const monthMap: Record<string, { count: number; units: number; approxValue: number }> = {};
-    for (const ev of events) {
-      const d = new Date(ev.vestingDate);
-      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      if (!monthMap[key]) monthMap[key] = { count: 0, units: 0, approxValue: 0 };
+
+    const monthMap: Record<string, { count: number; approxValue: number }> = {};
+    const cutoff = new Date(now.getFullYear(), now.getMonth() + 12, 1);
+
+    for (const b of benefits) {
+      const grantDate = new Date(b.enrolledAt);
+      const vestedPct = Number(b.utilizationPercent ?? 0);
+      const remainingPct = 100 - vestedPct;
+      if (remainingPct <= 0) continue;
+      const totalValue = Number(b.benefit.annualValue ?? 0);
+
+      // Find the next grant-date anniversary within the next 12 months
+      let nextVest = new Date(grantDate);
+      nextVest.setFullYear(now.getFullYear());
+      if (nextVest <= now) nextVest.setFullYear(now.getFullYear() + 1);
+      if (nextVest >= cutoff) continue;
+
+      const key = `${nextVest.getFullYear()}-${String(nextVest.getMonth() + 1).padStart(2, '0')}`;
+      if (!monthMap[key]) monthMap[key] = { count: 0, approxValue: 0 };
       monthMap[key].count++;
-      monthMap[key].units += ev.unitsVesting;
-      const price = Number(ev.rsuGrant.currentPrice ?? ev.rsuGrant.priceAtGrant ?? 0);
-      monthMap[key].approxValue += ev.unitsVesting * price;
+      monthMap[key].approxValue += totalValue * (remainingPct / 100);
     }
+
     const result = [];
     for (let i = 0; i < 12; i++) {
       const d = new Date(now.getFullYear(), now.getMonth() + i, 1);
@@ -192,7 +226,7 @@ export const dashboardService = {
       result.push({
         month: d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
         count: monthMap[key]?.count ?? 0,
-        units: monthMap[key]?.units ?? 0,
+        units: 0,
         approxValue: monthMap[key]?.approxValue ?? 0,
       });
     }
@@ -227,7 +261,7 @@ export const dashboardService = {
       select: { cycle: true },
     });
 
-    const [outsideBand, deptRows, upcomingVesting, lowPerfCount] = await Promise.all([
+    const [outsideBand, deptRows, activeEquityEnrollments, lowPerfCount] = await Promise.all([
       prisma.employee.count({
         where: { employmentStatus: 'ACTIVE', OR: [{ compaRatio: { lt: 80 } }, { compaRatio: { gt: 120 } }] },
       }),
@@ -236,8 +270,13 @@ export const dashboardService = {
         where: { employmentStatus: 'ACTIVE' },
         _avg: { annualFixed: true },
       }),
-      prisma.rsuVestingEvent.count({
-        where: { isVested: false, vestingDate: { gte: new Date(), lt: thirtyDaysOut } },
+      // Count employees with active unvested RSU grants (from EmployeeBenefit EQUITY records)
+      prisma.employeeBenefit.count({
+        where: {
+          status: 'ACTIVE',
+          utilizationPercent: { lt: 100 },
+          benefit: { category: 'EQUITY' },
+        },
       }),
       latestCycleRow
         ? prisma.performanceRating.count({
@@ -263,7 +302,7 @@ export const dashboardService = {
     const items: { type: string; severity: 'high' | 'medium'; message: string; link: string; count: number }[] = [];
     if (outsideBand > 0) items.push({ type: 'band', severity: 'high', message: `${outsideBand} employee${outsideBand !== 1 ? 's' : ''} outside salary band`, link: '/salary-bands', count: outsideBand });
     if (highGapDepts > 0) items.push({ type: 'equity', severity: 'high', message: `${highGapDepts} department${highGapDepts !== 1 ? 's' : ''} with gender pay gap > 15%`, link: '/pay-equity', count: highGapDepts });
-    if (upcomingVesting > 0) items.push({ type: 'rsu', severity: 'medium', message: `${upcomingVesting} RSU vesting event${upcomingVesting !== 1 ? 's' : ''} in the next 30 days`, link: '/rsu', count: upcomingVesting });
+    if (activeEquityEnrollments > 0) items.push({ type: 'rsu', severity: 'medium', message: `${activeEquityEnrollments} employee${activeEquityEnrollments !== 1 ? 's' : ''} with active unvested RSU grants`, link: '/benefits', count: activeEquityEnrollments });
     if (lowPerfCount > 0) items.push({ type: 'performance', severity: 'medium', message: `${lowPerfCount} employee${lowPerfCount !== 1 ? 's' : ''} with performance rating below 3.0`, link: '/performance', count: lowPerfCount });
     return items;
   }),

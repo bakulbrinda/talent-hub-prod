@@ -11,7 +11,7 @@ const benefitsApi = {
   getUtilization: async () => { const r = await api.get('/benefits/utilization'); return r.data; },
   getEnrollments: async () => { const r = await api.get('/benefits/enrollments'); return r.data; },
   getCategorySummary: async () => { const r = await api.get('/benefits/category-summary'); return r.data; },
-  getAIAnalysis: async () => { const r = await api.get('/benefits/ai-analysis'); return r.data; },
+  getRSUAIAnalysis: async () => { const r = await api.get('/rsu/ai-analysis'); return r.data; },
   importData: async (file: File) => {
     const fd = new FormData(); fd.append('file', file);
     const r = await api.post('/benefits/import', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
@@ -40,7 +40,7 @@ const CATEGORY_ICONS: Record<string, string> = {
 export default function BenefitsManagementPage() {
   const [activeTab, setActiveTab] = useState<'catalog' | 'utilization' | 'enrollments' | 'rsu'>('catalog');
   const [showImport, setShowImport] = useState(false);
-  const [showAI, setShowAI] = useState(false);
+  const [showRSUAI, setShowRSUAI] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importResult, setImportResult] = useState<any>(null);
@@ -62,10 +62,10 @@ export default function BenefitsManagementPage() {
     queryFn: benefitsApi.getEnrollments,
   });
 
-  const { data: aiRaw, isLoading: aiLoading, refetch: refetchAI } = useQuery({
-    queryKey: ['benefits', 'ai-analysis'],
-    queryFn: benefitsApi.getAIAnalysis,
-    enabled: showAI,
+  const { data: rsuAIRaw, isLoading: rsuAILoading, refetch: refetchRSUAI } = useQuery({
+    queryKey: ['rsu', 'ai-analysis'],
+    queryFn: benefitsApi.getRSUAIAnalysis,
+    enabled: showRSUAI,
     staleTime: 1800000,
   });
 
@@ -75,7 +75,6 @@ export default function BenefitsManagementPage() {
       setImportResult(data?.data || data);
       queryClient.invalidateQueries({ queryKey: ['benefits', 'utilization'] });
       queryClient.invalidateQueries({ queryKey: ['benefits', 'enrollments'] });
-      queryClient.removeQueries({ queryKey: ['benefits', 'ai-analysis'] });
       setImportFile(null);
     },
     onError: (error: any) => {
@@ -92,7 +91,8 @@ export default function BenefitsManagementPage() {
   const catalog = (catalogRaw?.data || []) as any[];
   const utilization = (utilizationRaw?.data || []) as any[];
   const enrollments = (enrollmentsRaw?.data || []) as any[];
-  const aiNarrative = (aiRaw?.data?.narrative || '') as string;
+  const uniqueEnrolledEmployees = new Set(enrollments.map((e: any) => e.employeeId)).size;
+  const rsuAINarrative = (rsuAIRaw?.data?.narrative || '') as string;
 
   // Group catalog by category
   const byCategory = catalog.reduce((acc: Record<string, any[]>, b: any) => {
@@ -124,15 +124,6 @@ export default function BenefitsManagementPage() {
         </div>
         <div className="flex items-center gap-2">
           <button
-            onClick={() => { setShowAI(!showAI); }}
-            className={cn('flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border',
-              showAI ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'
-            )}
-          >
-            <Sparkles className="w-4 h-4" />
-            AI Analysis
-          </button>
-          <button
             onClick={() => { setShowImport(!showImport); setImportResult(null); }}
             className={cn('flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border',
               showImport ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'
@@ -143,64 +134,6 @@ export default function BenefitsManagementPage() {
           </button>
         </div>
       </div>
-
-      {/* AI Analysis Panel */}
-      {showAI && (
-        <div className="rounded-xl border border-primary/30 bg-card overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-primary/5">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-primary" />
-              <span className="text-sm font-semibold text-foreground">AI Benefits Analysis</span>
-              <span className="text-xs text-muted-foreground">Powered by Claude</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => { queryClient.removeQueries({ queryKey: ['benefits', 'ai-analysis'] }); refetchAI(); }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
-              >
-                <RefreshCw className="w-3.5 h-3.5" />
-                Regenerate
-              </button>
-              <button onClick={() => setShowAI(false)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-          </div>
-          <div className="p-5 max-h-96 overflow-y-auto">
-            {aiLoading ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-3">
-                <div className="relative">
-                  <div className="w-10 h-10 rounded-full border-2 border-primary/30 animate-spin border-t-primary" />
-                  <Sparkles className="w-4 h-4 text-primary absolute inset-0 m-auto" />
-                </div>
-                <p className="text-sm text-muted-foreground">Claude is analyzing your benefits data...</p>
-              </div>
-            ) : aiNarrative ? (
-              <div className="prose prose-sm dark:prose-invert max-w-none">
-                <ReactMarkdown
-                  components={{
-                    h1: ({ children }) => <h1 className="text-base font-bold text-foreground mt-3 mb-2">{children}</h1>,
-                    h2: ({ children }) => <h2 className="text-sm font-semibold text-foreground mt-3 mb-1.5">{children}</h2>,
-                    h3: ({ children }) => <h3 className="text-sm font-semibold text-foreground mt-2 mb-1">{children}</h3>,
-                    p: ({ children }) => <p className="text-sm text-foreground leading-relaxed mb-2">{children}</p>,
-                    ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-2">{children}</ul>,
-                    ol: ({ children }) => <ol className="list-decimal list-inside space-y-1 mb-2">{children}</ol>,
-                    li: ({ children }) => <li className="text-sm text-foreground">{children}</li>,
-                    strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-                  }}
-                >
-                  {aiNarrative}
-                </ReactMarkdown>
-              </div>
-            ) : (
-              <div className="text-center py-8">
-                <Sparkles className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
-                <p className="text-sm text-muted-foreground">Click Regenerate to generate a fresh AI analysis</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Import Utilization Data Panel */}
       {showImport && (
@@ -225,9 +158,7 @@ export default function BenefitsManagementPage() {
                 </div>
                 <button
                   onClick={() => {
-                    const benefitNames = catalog.length > 0
-                      ? catalog.map((b: any) => b.name)
-                      : ['Comprehensive Medical Insurance', 'Parental Medical Insurance', 'Mental Health on Loop', 'Training & Learning Allowance', 'Annual Company Offsite'];
+                    const benefitNames = catalog.map((b: any) => b.name);
                     const headers = 'Employee ID,Benefit Name,Utilization %,Utilized Value';
                     const sample1 = benefitNames.map((name: string) => `EMP001,${name},0,0`);
                     const sample2 = benefitNames.map((name: string) => `EMP002,${name},0,0`);
@@ -307,7 +238,7 @@ export default function BenefitsManagementPage() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
           { label: 'Active Benefits', value: catalog.length, icon: '🎁', color: 'text-blue-600' },
-          { label: 'Total Enrollments', value: enrollments.length, icon: '👥', color: 'text-green-600' },
+          { label: 'Enrolled Employees', value: uniqueEnrolledEmployees, icon: '👥', color: 'text-green-600' },
           { label: 'Avg Utilization', value: `${Math.round(utilization.reduce((s: number, u: any) => s + u.avgUtilization, 0) / Math.max(utilization.length, 1))}%`, icon: '📊', color: 'text-purple-600' },
           { label: 'Categories', value: Object.keys(byCategory).length, icon: '🏷️', color: 'text-orange-600' },
         ].map(kpi => (
@@ -438,6 +369,74 @@ export default function BenefitsManagementPage() {
       {/* RSU Grants Tab */}
       {activeTab === 'rsu' && (
         <div className="space-y-5">
+          {/* RSU AI Analysis */}
+          <div className="flex justify-end">
+            <button
+              onClick={() => { setShowRSUAI(!showRSUAI); if (!showRSUAI) refetchRSUAI(); }}
+              className={cn('flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors border',
+                showRSUAI ? 'bg-primary text-primary-foreground border-primary' : 'border-border hover:bg-accent'
+              )}
+            >
+              <Sparkles className="w-4 h-4" />
+              AI Analysis
+            </button>
+          </div>
+          {showRSUAI && (
+            <div className="rounded-xl border border-primary/30 bg-card overflow-hidden">
+              <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-primary/5">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-semibold text-foreground">RSU AI Analysis</span>
+                  <span className="text-xs text-muted-foreground">Powered by Claude</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { queryClient.removeQueries({ queryKey: ['rsu', 'ai-analysis'] }); refetchRSUAI(); }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    Regenerate
+                  </button>
+                  <button onClick={() => setShowRSUAI(false)} className="p-1 rounded hover:bg-muted/50 text-muted-foreground">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+              <div className="p-5 max-h-96 overflow-y-auto">
+                {rsuAILoading ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-3">
+                    <div className="relative">
+                      <div className="w-10 h-10 rounded-full border-2 border-primary/30 animate-spin border-t-primary" />
+                      <Sparkles className="w-4 h-4 text-primary absolute inset-0 m-auto" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">Claude is analyzing RSU data...</p>
+                  </div>
+                ) : rsuAINarrative ? (
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown
+                      components={{
+                        h1: ({ children }) => <h1 className="text-base font-bold text-foreground mt-3 mb-2">{children}</h1>,
+                        h2: ({ children }) => <h2 className="text-sm font-semibold text-foreground mt-3 mb-1.5">{children}</h2>,
+                        h3: ({ children }) => <h3 className="text-sm font-semibold text-foreground mt-2 mb-1">{children}</h3>,
+                        p: ({ children }) => <p className="text-sm text-foreground leading-relaxed mb-2">{children}</p>,
+                        ul: ({ children }) => <ul className="list-disc list-inside space-y-1 mb-2">{children}</ul>,
+                        li: ({ children }) => <li className="text-sm text-foreground">{children}</li>,
+                        strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                      }}
+                    >
+                      {rsuAINarrative}
+                    </ReactMarkdown>
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Sparkles className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">Click Regenerate to generate RSU insights</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* RSU KPIs */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             {[

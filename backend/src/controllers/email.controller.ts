@@ -8,20 +8,53 @@ export const emailController = {
     try {
       const threshold = req.body.ratingThreshold ? Number(req.body.ratingThreshold) : 3.0;
       const result = await emailService.sendLowPerformerAlerts(threshold);
+      if (result.sent > 0) {
+        await prisma.mailLog.create({
+          data: {
+            sentById: req.user!.userId,
+            recipientEmail: `${result.sent} manager(s)`,
+            subject: `[Bulk] Low performer alerts — threshold ${threshold}/5`,
+            body: `Sent to ${result.sent} of ${result.managerCount} managers. ${result.skipped} skipped (no email).`,
+            useCase: 'low_performer_alert',
+          },
+        }).catch(() => {});
+      }
       res.json({ data: result });
     } catch (e) { next(e); }
   },
 
-  sendPayAnomalyAlert: async (_req: Request, res: Response, next: NextFunction) => {
+  sendPayAnomalyAlert: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await emailService.sendPayAnomalyAlert();
+      if (result.sent > 0) {
+        await prisma.mailLog.create({
+          data: {
+            sentById: req.user!.userId,
+            recipientEmail: process.env.HR_ALERT_EMAIL || 'hr@company.com',
+            subject: `[Bulk] Pay anomaly alert — ${result.outlierCount} outliers`,
+            body: `${result.outlierCount} employees outside salary bands flagged to HR.`,
+            useCase: 'pay_anomaly_alert',
+          },
+        }).catch(() => {});
+      }
       res.json({ data: result });
     } catch (e) { next(e); }
   },
 
-  sendRsuCliffReminders: async (_req: Request, res: Response, next: NextFunction) => {
+  sendRsuCliffReminders: async (req: Request, res: Response, next: NextFunction) => {
     try {
       const result = await emailService.sendRsuCliffReminders();
+      if (result.sent > 0) {
+        await prisma.mailLog.create({
+          data: {
+            sentById: req.user!.userId,
+            recipientEmail: `${result.sent} employee(s)`,
+            subject: `[Bulk] RSU vesting reminders — ${result.upcoming} upcoming vests`,
+            body: `Sent RSU vesting reminders to ${result.sent} employees.`,
+            useCase: 'rsu_cliff_reminder',
+          },
+        }).catch(() => {});
+      }
       res.json({ data: result });
     } catch (e) { next(e); }
   },

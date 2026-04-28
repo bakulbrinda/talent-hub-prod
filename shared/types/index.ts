@@ -623,8 +623,8 @@ export interface SocketRsuVestingPayload {
 }
 
 // ─── Enums ────────────────────────────────────────────────────
-export type BandCode = 'A1' | 'A2' | 'P1' | 'P2' | 'P3' | 'M1' | 'M2' | 'D0' | 'D1' | 'D2';
-export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT';
+export type BandCode = 'A1' | 'A2' | 'P1' | 'P2' | 'P3' | 'P4' | 'M0' | 'M1' | 'M2' | 'M3' | 'D0' | 'D1' | 'D2' | 'V0' | 'V1' | 'V2' | 'E0' | 'E1' | 'E2';
+export type EmploymentType = 'FULL_TIME' | 'PART_TIME' | 'CONTRACT' | 'INTERN';
 export type EmploymentStatus = 'ACTIVE' | 'INACTIVE' | 'ON_LEAVE' | 'TERMINATED';
 export type Gender = 'MALE' | 'FEMALE' | 'NON_BINARY' | 'PREFER_NOT_TO_SAY';
 export type WorkMode = 'REMOTE' | 'HYBRID' | 'ONSITE';

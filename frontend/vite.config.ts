@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
 
-const DEV_API = 'http://localhost:3001';
+const DEV_API = 'http://localhost:3002';
 
 export default defineConfig({
   plugins: [react()],
@@ -15,7 +15,7 @@ export default defineConfig({
   server: {
     port: 5179,
     // Allow Cloudflare tunnel hostnames (*.trycloudflare.com) to reach the dev server
-    allowedHosts: ['localhost', '.trycloudflare.com'],
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: DEV_API,

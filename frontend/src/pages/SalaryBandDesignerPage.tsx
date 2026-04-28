@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Plus, TrendingUp, AlertTriangle, Edit2, X, Sparkles, Loader2, ArrowUp, ArrowDown, Minus, Trash2, ChevronDown } from 'lucide-react';
+import { Plus, TrendingUp, AlertTriangle, Edit2, X, Trash2, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 import { salaryBandService } from '../services/salaryBand.service';
 import { api } from '../lib/api';
@@ -16,7 +16,6 @@ const TABS = [
   { id: 'chart', label: 'Band Chart' },
   { id: 'editor', label: 'Range Editor' },
   { id: 'outliers', label: 'Outliers' },
-  { id: 'ai', label: 'AI Recommendations' },
 ] as const;
 type TabId = typeof TABS[number]['id'];
 
@@ -50,24 +49,7 @@ export default function SalaryBandDesignerPage() {
   const [activeTab, setActiveTab] = useState<TabId>('chart');
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [aiBandSuggestions, setAiBandSuggestions] = useState<any[]>([]);
-  const [aiBandLoading, setAiBandLoading] = useState(false);
-
   const qc = useQueryClient();
-
-  const fetchBandSuggestions = async () => {
-    setAiBandLoading(true);
-    setAiBandSuggestions([]);
-    setActiveTab('ai');
-    try {
-      const res = await api.post('/ai/chat/band-suggestions', {});
-      setAiBandSuggestions(res.data.data || []);
-    } catch {
-      toast.error('Failed to get AI band recommendations');
-    } finally {
-      setAiBandLoading(false);
-    }
-  };
 
   const { data: bandsRaw, isLoading } = useQuery({
     queryKey: queryKeys.salaryBands.all(),
@@ -227,14 +209,6 @@ export default function SalaryBandDesignerPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <button
-            onClick={fetchBandSuggestions}
-            disabled={aiBandLoading}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg border border-primary/30 bg-primary/5 text-primary text-sm font-medium hover:bg-primary/10 transition-colors disabled:opacity-50"
-          >
-            {aiBandLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
-            AI Recommendations
-          </button>
           <button
             onClick={() => setShowModal(true)}
             className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors"
@@ -478,103 +452,6 @@ export default function SalaryBandDesignerPage() {
                 </div>
               );
             })
-          )}
-        </div>
-      )}
-
-      {/* ── AI Band Recommendations ── */}
-      {activeTab === 'ai' && (
-        <div className="rounded-xl border border-border bg-card p-5">
-          <div className="flex items-center gap-2 mb-4">
-            <Sparkles className="w-4 h-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">AI Band Adjustment Recommendations</h3>
-          </div>
-          {aiBandLoading ? (
-            <div className="py-16 flex flex-col items-center gap-3">
-              <Loader2 className="w-7 h-7 text-primary animate-spin" />
-              <p className="text-sm text-muted-foreground">Analyzing compa-ratio distribution across all bands…</p>
-            </div>
-          ) : aiBandSuggestions.length === 0 ? (
-            <div className="py-16 flex flex-col items-center text-center gap-3">
-              <Sparkles className="w-10 h-10 text-muted-foreground/20" />
-              <p className="text-sm font-medium text-foreground">Get AI-driven band adjustment recommendations</p>
-              <p className="text-xs text-muted-foreground max-w-md">
-                Claude analyzes your current compa-ratio distribution and suggests whether each band's min/mid/max should be adjusted.
-              </p>
-              <button
-                onClick={fetchBandSuggestions}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors mt-2"
-              >
-                <Sparkles className="w-4 h-4" />
-                Analyze Bands
-              </button>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {aiBandSuggestions.map((s: any) => {
-                const directionIcon = s.direction === 'increase' ? (
-                  <ArrowUp className="w-3.5 h-3.5 text-green-600" />
-                ) : s.direction === 'decrease' ? (
-                  <ArrowDown className="w-3.5 h-3.5 text-red-600" />
-                ) : (
-                  <Minus className="w-3.5 h-3.5 text-muted-foreground" />
-                );
-                const urgencyColor = s.urgency === 'high'
-                  ? 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400'
-                  : s.urgency === 'medium'
-                    ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400'
-                    : 'bg-muted text-muted-foreground';
-
-                return (
-                  <div
-                    key={s.band}
-                    className={cn(
-                      'rounded-xl border-2 p-4 space-y-3',
-                      s.direction === 'maintain' ? 'border-border' : 'border-primary/30'
-                    )}
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className={cn('px-2 py-0.5 rounded-full text-xs font-bold', getBandColor(s.band))}>
-                        {s.band}
-                      </span>
-                      <div className="flex items-center gap-1.5">
-                        {directionIcon}
-                        <span className={cn('text-xs px-1.5 py-0.5 rounded-full font-medium capitalize', urgencyColor)}>
-                          {s.urgency}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-muted-foreground">Current Mid</span>
-                        <span className="font-mono font-semibold text-foreground">₹{s.currentMidLakhs?.toFixed(1)}L</span>
-                      </div>
-                      {s.direction !== 'maintain' && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Suggested Mid</span>
-                          <span className={cn('font-mono font-semibold',
-                            s.direction === 'increase' ? 'text-green-600' : 'text-red-600'
-                          )}>
-                            ₹{s.suggestedMidLakhs?.toFixed(1)}L
-                          </span>
-                        </div>
-                      )}
-                      {s.impactEmployees > 0 && (
-                        <div className="flex justify-between">
-                          <span className="text-muted-foreground">Impact</span>
-                          <span className="text-foreground">{s.impactEmployees} employees</span>
-                        </div>
-                      )}
-                    </div>
-
-                    <p className="text-[11px] text-muted-foreground leading-relaxed border-t border-border pt-2">
-                      {s.reasoning}
-                    </p>
-                  </div>
-                );
-              })}
-            </div>
           )}
         </div>
       )}

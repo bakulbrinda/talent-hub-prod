@@ -8,7 +8,9 @@ const BASE_URL = '/api';
 export const api = axios.create({
   baseURL: BASE_URL,
   timeout: 30000,
-  headers: { 'Content-Type': 'application/json' },
+  // Do NOT set Content-Type here — it is set per-request in the interceptor below.
+  // Setting it globally prevents the browser from auto-adding the multipart boundary
+  // when uploading FormData, which breaks multer on the backend.
 });
 
 // ─── Token Management ─────────────────────────────────────────
@@ -59,6 +61,15 @@ api.interceptors.request.use(
     const token = getAccessToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
+    }
+    // Set Content-Type explicitly per request type:
+    // - FormData: do NOT set it — the browser must set multipart/form-data with
+    //   the correct boundary automatically. multer needs the boundary to parse the file.
+    // - Everything else: application/json (standard for all our REST calls).
+    if (config.data instanceof FormData) {
+      config.headers.set('Content-Type', null as any);
+    } else if (!config.headers['Content-Type']) {
+      config.headers['Content-Type'] = 'application/json';
     }
     return config;
   },

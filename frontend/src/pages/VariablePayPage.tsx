@@ -1,11 +1,27 @@
-import { useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { Zap, TrendingUp, Users, DollarSign } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { Zap, TrendingUp, Users, DollarSign, Sparkles, RefreshCw } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 import { api } from '../lib/api';
 import { cn } from '../lib/utils';
 import { BAND_ORDER } from '@shared/constants/index';
 
+const variablePayApi = {
+  getAIAnalysis: async () => { const r = await api.get('/variable-pay/ai-analysis'); return r.data; },
+};
+
 export default function VariablePayPage() {
+  const [showAI, setShowAI] = useState(false);
+  const queryClient = useQueryClient();
+
+  const { data: aiRaw, isLoading: aiLoading } = useQuery({
+    queryKey: ['variable-pay', 'ai-analysis'],
+    queryFn: variablePayApi.getAIAnalysis,
+    enabled: showAI,
+    staleTime: 1800000,
+  });
+  const aiNarrative = (aiRaw?.data?.narrative || '') as string;
+
   const { data: empRaw, isLoading } = useQuery({
     queryKey: ['employees'],
     queryFn: async () => { const r = await api.get('/employees?limit=2000'); return r.data; },
@@ -106,12 +122,48 @@ export default function VariablePayPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Variable Pay</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">
-          Variable pay analytics derived from compensation data — {employees.length} employees · {withVariable.length} with variable component
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Variable Pay</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            Variable pay analytics derived from compensation data — {employees.length} employees · {withVariable.length} with variable component
+          </p>
+        </div>
+        <button
+          onClick={() => {
+            if (showAI) { queryClient.invalidateQueries({ queryKey: ['variable-pay', 'ai-analysis'] }); }
+            setShowAI(true);
+          }}
+          className="flex items-center gap-2 px-3 py-2 rounded-lg border border-primary/30 bg-primary/5 text-primary text-sm hover:bg-primary/10 transition-colors flex-shrink-0"
+        >
+          {aiLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+          AI Analysis
+        </button>
       </div>
+
+      {/* AI Analysis Panel */}
+      {showAI && (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-5">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="w-4 h-4 text-primary" />
+            <span className="text-sm font-semibold text-primary">Variable Pay AI Analysis</span>
+          </div>
+          {aiLoading && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+              Analysing variable pay patterns…
+            </div>
+          )}
+          {!aiLoading && aiNarrative && (
+            <div className="prose prose-sm max-w-none text-foreground [&>p]:mb-2 [&>ul]:ml-4 [&>ul>li]:mb-1">
+              <ReactMarkdown>{aiNarrative}</ReactMarkdown>
+            </div>
+          )}
+          {!aiLoading && !aiNarrative && (
+            <p className="text-sm text-muted-foreground">No analysis available. Ensure variable pay data is loaded.</p>
+          )}
+        </div>
+      )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">

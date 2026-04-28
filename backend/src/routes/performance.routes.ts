@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/authenticate';
+import { requireRole } from '../middleware/requireRole';
 import { performanceController } from '../controllers/performance.controller';
 
 const router = Router();
 router.use(authenticate);
 
 router.get('/ratings', performanceController.getRatings);
-router.post('/ratings', performanceController.createRating);
+router.post('/ratings', requireRole('ADMIN', 'HR_MANAGER'), performanceController.createRating);
 router.get('/matrix', performanceController.getMatrix);
 router.get('/promotion-readiness', performanceController.getPromotionReadiness);
 router.get('/pay-alignment-gaps', performanceController.getPayAlignmentGaps);

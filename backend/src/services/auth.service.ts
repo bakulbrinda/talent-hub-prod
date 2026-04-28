@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { prisma } from '../lib/prisma';
 import { unauthorized, badRequest } from '../middleware/errorHandler';
 import type { AuthUser } from '../types/index';
+import { logAction } from './auditLog.service';
 
 const ACCESS_SECRET = process.env.JWT_SECRET!;
 const REFRESH_SECRET = process.env.JWT_REFRESH_SECRET!;
@@ -10,14 +11,17 @@ const ACCESS_EXPIRES = process.env.JWT_ACCESS_EXPIRES_IN || '15m';
 const REFRESH_EXPIRES = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
 
 export const authService = {
-  async login(email: string, password: string) {
+  async login(email: string, password: string, ip?: string) {
     const user = await prisma.user.findUnique({ where: { email: email.trim().toLowerCase() } });
     if (!user) throw unauthorized('Invalid email or password');
 
     if (!user.isActive) throw unauthorized('Your account has been deactivated. Contact your admin.');
 
     const valid = await bcrypt.compare(password, user.password);
-    if (!valid) throw unauthorized('Invalid email or password');
+    if (!valid) {
+      logAction({ userId: user.id, action: 'LOGIN_FAILED', metadata: { email }, ip });
+      throw unauthorized('Invalid email or password');
+    }
 
     const authUser: AuthUser = {
       id: user.id,
@@ -53,6 +57,8 @@ export const authService = {
       }),
     ]);
 
+    logAction({ userId: user.id, action: 'LOGIN_SUCCESS', metadata: { email: user.email }, ip });
+
     return { accessToken, refreshToken, user: authUser };
   },
 
@@ -85,9 +91,11 @@ export const authService = {
     return { accessToken };
   },
 
-  async logout(refreshToken: string) {
+  async logout(refreshToken: string, ip?: string) {
     try {
+      const stored = await prisma.refreshToken.findUnique({ where: { token: refreshToken } });
       await prisma.refreshToken.delete({ where: { token: refreshToken } });
+      if (stored) logAction({ userId: stored.userId, action: 'LOGOUT', ip });
     } catch {
       // Ignore if token doesn't exist
     }
@@ -108,6 +116,7 @@ export const authService = {
     await prisma.user.update({ where: { id: userId }, data: { password: hashedPassword } });
     // Revoke all refresh tokens for security
     await prisma.refreshToken.deleteMany({ where: { userId } });
+    logAction({ userId, action: 'PASSWORD_CHANGED' });
     return { message: 'Password changed. Please log in again.' };
   },
 

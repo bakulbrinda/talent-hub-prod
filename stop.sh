@@ -40,8 +40,8 @@ stop_process() {
 }
 
 echo "■  Stopping Talent Hub..."
-stop_process "frontend"
 stop_process "backend"
-stop_process "cloudflared"
+# clean up any stale pid files from old tunnel setup
+rm -f "$LOG_DIR/cloudflared.pid" "$LOG_DIR/frontend.pid"
 echo ""
 echo "All services stopped."

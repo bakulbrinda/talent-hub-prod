@@ -15,6 +15,10 @@ router.put('/job-areas/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.updateJobA
 
 router.get('/job-families', ctrl.getJobFamilies);
 router.post('/job-families', requireRole('ADMIN', 'HR_MANAGER'), ctrl.createJobFamily);
+router.put('/job-families/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.updateJobFamily);
+router.delete('/job-families/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.deleteJobFamily);
+
+router.delete('/job-areas/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.deleteJobArea);
 
 router.get('/bands', ctrl.getBands);
 router.post('/bands', requireRole('ADMIN', 'HR_MANAGER'), ctrl.createBand);
@@ -22,9 +26,14 @@ router.put('/bands/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.updateBand);
 router.delete('/bands/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.deleteBand);
 
 router.get('/grades', ctrl.getGrades);
+router.post('/grades', requireRole('ADMIN', 'HR_MANAGER'), ctrl.createGrade);
+router.put('/grades/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.updateGrade);
+router.delete('/grades/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.deleteGrade);
 
 router.get('/job-codes', ctrl.getJobCodes);
 router.post('/job-codes', requireRole('ADMIN', 'HR_MANAGER'), ctrl.createJobCode);
+router.put('/job-codes/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.updateJobCode);
+router.delete('/job-codes/:id', requireRole('ADMIN', 'HR_MANAGER'), ctrl.deleteJobCode);
 
 router.get('/skills', ctrl.getSkills);
 router.post('/skills', requireRole('ADMIN', 'HR_MANAGER'), ctrl.createSkill);

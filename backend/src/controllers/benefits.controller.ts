@@ -30,13 +30,6 @@ export const benefitsController = {
     try { res.json({ data: await benefitsService.getCategorySummary() }); } catch (e) { next(e); }
   },
 
-  getAIAnalysis: async (_req: Request, res: Response, next: NextFunction) => {
-    try {
-      const narrative = await benefitsService.analyzeWithAI();
-      res.json({ data: { narrative } });
-    } catch (e) { next(e); }
-  },
-
   importData: async (req: Request, res: Response, next: NextFunction) => {
     try {
       if (!req.file) {

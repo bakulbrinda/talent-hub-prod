@@ -1,12 +1,13 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/authenticate';
+import { requireRole } from '../middleware/requireRole';
 import { rsuController } from '../controllers/rsu.controller';
 
 const router = Router();
 router.use(authenticate);
 
 router.get('/', rsuController.getGrants);
-router.post('/', rsuController.createGrant);
+router.post('/', requireRole('ADMIN', 'HR_MANAGER'), rsuController.createGrant);
 router.get('/vesting-schedule', rsuController.getVestingSchedule);
 router.get('/eligibility-gap', rsuController.getEligibilityGap);
 router.get('/summary', rsuController.getSummary);

@@ -24,6 +24,7 @@ const dashboardApi = {
   getRsuVestingTimeline: async () => { const r = await api.get('/dashboard/rsu-vesting-timeline'); return r.data; },
   getAttritionRisk: async () => { const r = await api.get('/dashboard/attrition-risk'); return r.data; },
   getActionRequired: async () => { const r = await api.get('/dashboard/action-required'); return r.data; },
+  getAISummary: async () => { const r = await api.get('/ai-insights/dashboard-summary'); return r.data; },
 };
 
 const BAND_PIE_COLORS = ['#64748b','#3b82f6','#6366f1','#8b5cf6','#a855f7','#f59e0b'];
@@ -81,7 +82,6 @@ const QUICK_LINKS = [
   { to: '/benefits-hub', label: 'Benefits Hub', icon: Gift, color: 'text-teal-500' },
   { to: '/employees', label: 'Employees', icon: Users, color: 'text-blue-500' },
   { to: '/pay-equity', label: 'Pay Equity', icon: Scale, color: 'text-purple-500' },
-  { to: '/ai-insights', label: 'AI Insights', icon: Sparkles, color: 'text-pink-500' },
   { to: '/performance', label: 'Performance', icon: TrendingUp, color: 'text-emerald-500' },
   { to: '/salary-bands', label: 'Salary Bands', icon: BarChart3, color: 'text-indigo-500' },
   { to: '/rsu', label: 'RSU Tracker', icon: Award, color: 'text-cyan-500' },
@@ -144,6 +144,12 @@ export default function DashboardPage() {
     staleTime: STALE_TIMES.LIVE,
   });
 
+  const { data: aiSummaryRaw } = useQuery({
+    queryKey: ['dashboard', 'ai-summary'],
+    queryFn: dashboardApi.getAISummary,
+    staleTime: 30 * 60 * 1000,
+  });
+
   const kpis: any = (kpisRaw as any)?.data ?? kpisRaw;
   const bandDist: any[] = (bandDistRaw as any)?.data ?? (Array.isArray(bandDistRaw) ? bandDistRaw : []);
   const salaryDist: any[] = (salaryDistRaw as any)?.data ?? (Array.isArray(salaryDistRaw) ? salaryDistRaw : []);
@@ -152,6 +158,7 @@ export default function DashboardPage() {
   const rsuTimeline: any[] = (rsuTimelineRaw as any)?.data ?? (Array.isArray(rsuTimelineRaw) ? rsuTimelineRaw : []);
   const attrition: any[] = (attritionRaw as any)?.data ?? (Array.isArray(attritionRaw) ? attritionRaw : []);
   const actionItems: any[] = (actionRaw as any)?.data ?? (Array.isArray(actionRaw) ? actionRaw : []);
+  const aiSummary: string = (aiSummaryRaw as any)?.data?.summary ?? '';
 
   // Derive pay–performance risk list from scatter data
   const riskRows = compVsPerf
@@ -160,7 +167,7 @@ export default function DashboardPage() {
       const cr = Number(e.compaRatio) || 100;
       if (rating >= 4.0 && cr < 95)
         acc.push({ ...e, riskLabel: 'Underpaid Star', _priority: 1, _score: (100 - cr) + rating * 5 });
-      else if (rating < 2.5 && cr > 105)
+      else if (rating < 3 && cr >= 100)
         acc.push({ ...e, riskLabel: 'Overpaid / Low Perf', _priority: 2, _score: (cr - 100) + (5 - rating) * 3 });
       return acc;
     }, [])
@@ -176,6 +183,14 @@ export default function DashboardPage() {
         <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-0.5">Real-time compensation intelligence overview</p>
       </div>
+
+      {/* ── AI Summary ── */}
+      {aiSummary && (
+        <div className="rounded-xl border border-primary/20 bg-primary/5 px-5 py-3 flex items-start gap-3">
+          <Sparkles className="w-4 h-4 text-primary mt-0.5 flex-shrink-0" />
+          <p className="text-sm text-foreground leading-relaxed">{aiSummary}</p>
+        </div>
+      )}
 
       {/* ── Action Required Panel ── */}
       {actionItems.length > 0 && (

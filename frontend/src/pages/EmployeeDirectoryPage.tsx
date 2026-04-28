@@ -12,7 +12,6 @@ import { api } from '../lib/api';
 import AddEmployeeModal from '../components/employees/AddEmployeeModal';
 import { BAND_ORDER } from '@shared/constants/index';
 
-const DEPARTMENTS = ['Engineering', 'Sales', 'Product', 'HR', 'Finance', 'Operations'];
 const BANDS = BAND_ORDER;
 
 function CompaRatioBadge({ value }: { value: number | string | null | undefined }) {
@@ -40,6 +39,13 @@ export default function EmployeeDirectoryPage() {
   const [editEmployee, setEditEmployee] = useState<any | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const queryClient = useQueryClient();
+
+  const { data: jobAreasRaw } = useQuery({
+    queryKey: ['job-areas'],
+    queryFn: () => api.get('/job-areas').then(r => r.data?.data ?? []),
+    staleTime: 10 * 60 * 1000,
+  });
+  const DEPARTMENTS: string[] = Array.isArray(jobAreasRaw) ? jobAreasRaw.map((a: any) => a.name) : [];
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/employees/${id}`),
